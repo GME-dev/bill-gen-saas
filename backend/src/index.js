@@ -1,42 +1,37 @@
 import express from 'express'
 import cors from 'cors'
-import morgan from 'morgan'
 import { initializeDatabase } from './utils/database.js'
 import billsRouter from './routes/bills.js'
 import bikeModelsRouter from './routes/bike-models.js'
+import healthRouter from './routes/health.js'
 
 const app = express()
-const PORT = process.env.PORT || 3000
+const port = process.env.PORT || 3000
 
 // Middleware
-app.use(cors())
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type']
+}))
 app.use(express.json())
-app.use(morgan('dev'))
-
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
-})
 
 // Routes
 app.use('/api/bills', billsRouter)
 app.use('/api/bike-models', bikeModelsRouter)
+app.use('/api/health', healthRouter)
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err)
-  res.status(500).json({ error: 'Internal server error' })
+  console.error(err.stack)
+  res.status(500).json({ error: 'Something broke!' })
 })
 
-// Initialize database and start server
 async function startServer() {
   try {
-    console.log('Initializing database...')
     await initializeDatabase()
-    console.log('Database initialized successfully')
-    
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`)
+    app.listen(port, () => {
+      console.log(`Server running on port ${port}`)
     })
   } catch (error) {
     console.error('Failed to start server:', error)
