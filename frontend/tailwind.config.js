@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+// Tailwind configuration with primary color palette
 module.exports = {
   content: [
     "./index.html",
