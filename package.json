@@ -1,27 +1,12 @@
 {
-  "name": "bill_gen_saas",
-  "version": "1.0.0",
-  "description": "Bill Generation SaaS with Digital Signature Support",
-  "main": "index.js",
+  "name": "scooter-bill-generator-workspace",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "start": "node backend/src/index.js",
-    "dev": "nodemon backend/src/index.js",
-    "test": "jest"
-  },
-  "dependencies": {
-    "@headlessui/react": "^1.7.17",
-    "@heroicons/react": "^2.0.18",
-    "@pdf-lib/fontkit": "^1.1.1",
-    "axios": "^1.6.2",
-    "crypto": "^1.0.1",
-    "express": "^4.18.2",
-    "multer": "^1.4.5-lts.1",
-    "pdf-lib": "^1.17.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "jest": "^29.7.0",
-    "nodemon": "^3.0.2"
+    "build": "npm install && cd frontend && npm install && npm run build",
+    "start": "cd frontend && npm start"
   }
 }
