@@ -13,9 +13,10 @@ RUN npm install --production
 COPY src ./src
 COPY assets ./assets
 COPY templates ./templates
-COPY tsconfig.json ./
-COPY wrangler.toml ./
-COPY .env ./
+
+# Add any optional files if they exist
+COPY tsconfig.json* ./
+COPY wrangler.toml* ./
 
 # Create necessary directories
 RUN mkdir -p assets/certificates assets/fonts data uploads
@@ -24,6 +25,11 @@ RUN mkdir -p assets/certificates assets/fonts data uploads
 ENV PORT=3000
 ENV NODE_ENV=production
 ENV CORS_ORIGIN=https://tmr-bill-generator.pages.dev
+ENV DATABASE_URL=postgres://postgres:p*BQQ44ue-PfE2R@db.onmonxsgkdaurztdhafz.supabase.co:5432/postgres
+ENV SUPABASE_SSL_ENABLED=true
+ENV TEMPLATES_DIR=./templates
+ENV FRONTEND_URL=https://tmr-bill-generator.pages.dev
+ENV JWT_SECRET=your-production-secret
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
