@@ -6,8 +6,9 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Explicitly install multer package in addition to package.json dependencies
 RUN npm install --production
+RUN npm install multer@1.4.5-lts.1
 
 # Copy the application files
 COPY src ./src
