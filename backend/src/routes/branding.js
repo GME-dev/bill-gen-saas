@@ -1,18 +1,35 @@
 import express from 'express'
-import multer from 'multer'
 import { FontManager } from '../utils/fontManager.js'
 
 const router = express.Router()
 const fontManager = new FontManager()
 
-// Configure multer for file uploads
-const storage = multer.memoryStorage()
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
-  },
-})
+// Try to import multer, but create a fallback if it fails
+let multer, upload;
+try {
+  multer = await import('multer');
+  // Configure multer for file uploads
+  const storage = multer.default.memoryStorage();
+  upload = multer.default({
+    storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+  });
+} catch (err) {
+  console.error('Failed to load multer package:', err);
+  // Create a simple fallback middleware
+  const fallbackMiddleware = (req, res, next) => {
+    console.error('File uploads are disabled: multer package is missing');
+    return res.status(503).json({ 
+      error: 'File upload service unavailable', 
+      message: 'The file upload feature is temporarily disabled'
+    });
+  };
+  upload = {
+    single: () => fallbackMiddleware
+  };
+}
 
 // Get current branding configuration
 router.get('/', async (req, res) => {

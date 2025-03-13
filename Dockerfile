@@ -1,3 +1,19 @@
+# Build stage
+FROM node:18-alpine AS build
+
+# Set working directory
+WORKDIR /build
+
+# Copy package files
+COPY package*.json ./
+
+# Install ALL dependencies (including dev dependencies)
+RUN npm install
+
+# Explicitly add multer
+RUN npm install multer@1.4.5-lts.1
+
+# Production stage
 FROM node:18-alpine
 
 # Set working directory
@@ -8,6 +24,10 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm install --production
+RUN npm install multer@1.4.5-lts.1
+
+# Copy node_modules from build stage to ensure all dependencies are included
+COPY --from=build /build/node_modules /app/node_modules
 
 # Copy the application files
 COPY src ./src

@@ -7,4 +7,7 @@ startCommand = "node src/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3 
+restartPolicyMaxRetries = 3
+
+[deploy.railway]
+SERVICE_ROOT = "/mnt/e/bill_gen_saas/backend" 
