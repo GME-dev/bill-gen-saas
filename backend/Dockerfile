@@ -1,9 +1,7 @@
 FROM node:18-alpine
 
-# Install basic Alpine tools
-RUN apk add --no-cache bash
-
-WORKDIR /app/backend
+# Set working directory
+WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
@@ -14,6 +12,11 @@ RUN npm install
 # Copy the rest of the application
 COPY . .
 
+# Environment variables
+ENV PORT=3000
+ENV NODE_ENV=production
+
 EXPOSE 3000
 
-CMD ["node", "src/index.js"] 
+# Start command with absolute path
+CMD ["node", "/app/src/index.js"] 

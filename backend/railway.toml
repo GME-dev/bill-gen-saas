@@ -1,8 +1,9 @@
 [build]
-dockerfile = "Dockerfile"
-dockerfilePath = "backend/Dockerfile"
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
 
 [deploy]
+startCommand = "node /app/src/index.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/api/health"
