@@ -21,6 +21,11 @@ app.use('/api/bills', billsRouter)
 app.use('/api/bike-models', bikeModelsRouter)
 app.use('/api/health', healthRouter)
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'healthy' });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack)
