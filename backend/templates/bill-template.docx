@@ -1,0 +1,18 @@
+BILL
+
+Date: {date}
+
+Customer Details:
+Name: {customer_name}
+NIC: {customer_nic}
+Address: {customer_address}
+
+Items:
+{#items}
+- {product_name}
+  Quantity: {quantity}
+  Unit Price: {unit_price}
+  Total: {total_price}
+{/items}
+
+Total Amount: {total_amount} 
