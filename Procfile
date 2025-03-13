@@ -1,1 +1,1 @@
-web: node backend/src/index.js
+web: node --dns-result-order=ipv4first backend/src/index.js
