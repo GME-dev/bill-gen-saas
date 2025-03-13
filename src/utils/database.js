@@ -39,8 +39,8 @@ export async function initializeDatabase() {
     // to ensure we use proper IPv4 connectivity
     let connectionString = process.env.DATABASE_URL || '';
     
-    // Extract connection details from the connection string
-    const userPassHostMatch = connectionString.match(/postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
+    // Extract connection details from the connection string - supporting both postgres:// and postgresql://
+    const userPassHostMatch = connectionString.match(/(?:postgres|postgresql):\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
     
     let user, password, host, port, database;
     
@@ -57,41 +57,33 @@ export async function initializeDatabase() {
       console.warn('Could not parse DATABASE_URL, using defaults');
     }
     
-    // Configure connection
-    let config;
-    if (userPassHostMatch) {
-      // Use individual parameters to ensure IPv4 is used
-      config = {
-        user,
-        password,
-        host,
-        port,
-        database,
-        ssl: {
-          rejectUnauthorized: false,
-          sslmode: 'require'
-        },
-        family: 4, // Force IPv4 connections
-        max: 20, // Maximum number of clients in the pool
-        idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-        connectionTimeoutMillis: 10000, // Extended timeout for connection
-        keepAlive: true // Keep the connection alive
-      }
-    } else {
-      // Fallback to connection string if parsing failed
-      config = {
-        connectionString: process.env.DATABASE_URL,
-        ssl: {
-          rejectUnauthorized: false,
-          sslmode: 'require'
-        },
-        family: 4, // Force IPv4 connections
-        max: 20, // Maximum number of clients in the pool
-        idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-        connectionTimeoutMillis: 10000, // Extended timeout for connection
-        keepAlive: true // Keep the connection alive
-      }
+    // Configure connection - DIRECT IPV4 CONNECTION
+    // Hard-coded IPv4 address fallback for aws-0-ap-south-1.pooler.supabase.com
+    // We'll modify the connection string to use an IPv4 address if we can parse it
+    let modifiedConnectionString = process.env.DATABASE_URL || '';
+    
+    // Replace the hostname with a specific IPv4 address if it contains pooler.supabase.com
+    if (modifiedConnectionString.includes('pooler.supabase.com')) {
+      // Replace the hostname with the IPv4 address - example format below
+      // postgresql://username:password@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+      modifiedConnectionString = modifiedConnectionString.replace(
+        /(?:postgres|postgresql):\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/,
+        'postgresql://$1:$2@3.111.105.85:$4/$5'  // Actual IPv4 address for aws-0-ap-south-1.pooler.supabase.com
+      );
+      console.log('Using fixed IPv4 connection string (hostname replaced with IP)');
     }
+
+    let config = {
+      connectionString: modifiedConnectionString,
+      ssl: {
+        rejectUnauthorized: false,
+        sslmode: 'require'
+      },
+      max: 20, // Maximum number of clients in the pool
+      idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
+      connectionTimeoutMillis: 10000, // Extended timeout for connection
+      keepAlive: true, // Keep the connection alive
+    };
 
     db = new Pool(config)
 
