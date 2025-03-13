@@ -6,11 +6,25 @@ const router = express.Router();
 router.get('/', async (req, res) => {
     try {
         const db = getDatabase();
-        await db.query('SELECT 1'); // Test database connection
-        res.json({ status: 'healthy', message: 'Service is running' });
+        if (!db) {
+          throw new Error('Database not initialized');
+        }
+        
+        // Test database connection
+        await db.query('SELECT 1');
+        
+        res.status(200).json({
+          status: 'healthy',
+          database: 'connected',
+          timestamp: new Date().toISOString()
+        });
     } catch (error) {
         console.error('Health check failed:', error);
-        res.status(500).json({ status: 'unhealthy', message: error.message });
+        res.status(503).json({
+          status: 'unhealthy',
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
     }
 });
 

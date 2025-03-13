@@ -12,13 +12,17 @@ RUN npm install --production
 # Copy the application files
 COPY src ./src
 COPY assets ./assets
+COPY templates ./templates
+COPY tsconfig.json ./
+COPY wrangler.toml ./
 
 # Environment variables
 ENV PORT=3000
 ENV NODE_ENV=production
+ENV CORS_ORIGIN=https://tmr-bill-generator.pages.dev
 
 # Create necessary directories
-RUN mkdir -p assets/certificates assets/fonts
+RUN mkdir -p assets/certificates assets/fonts data uploads
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
