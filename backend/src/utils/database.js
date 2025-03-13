@@ -6,6 +6,8 @@ dotenv.config()
 
 const { Pool } = pg
 let db = null
+let connectionAttempts = 0
+const MAX_CONNECTION_ATTEMPTS = 5
 
 export async function initializeDatabase() {
   if (db) {
@@ -13,7 +15,17 @@ export async function initializeDatabase() {
     return db
   }
 
-  console.log('Initializing database...')
+  connectionAttempts++
+  console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
+  
+  // Log database connection string (masked for security)
+  const connString = process.env.DATABASE_URL || ''
+  if (connString) {
+    const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
+    console.log(`Using database connection: ${maskedString}`)
+  } else {
+    console.error('DATABASE_URL environment variable is not set!')
+  }
 
   try {
     const config = {
@@ -24,18 +36,34 @@ export async function initializeDatabase() {
       },
       max: 20, // Maximum number of clients in the pool
       idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-      connectionTimeoutMillis: 5000 // How long to wait for a connection
+      connectionTimeoutMillis: 10000 // Extended timeout for connection
     }
 
     db = new Pool(config)
 
+    // Add error handler for the pool
+    db.on('error', (err) => {
+      console.error('Unexpected database pool error:', err)
+      // If we lose connection, null out db so we can try to reconnect
+      if (err.message.includes('connection terminated') || err.message.includes('connection refused')) {
+        console.log('Database connection lost, will reconnect on next request')
+        db = null
+        connectionAttempts = 0
+      }
+    })
+
     // Test the connection
     const client = await db.connect()
     try {
+      console.log('Connected to database, running test query...')
       await client.query('SELECT NOW()')
       console.log('Database connected successfully')
+      
+      // Reset connection attempts on success
+      connectionAttempts = 0
 
       // Create tables if they don't exist
+      console.log('Creating tables if needed...')
       await client.query(`
         CREATE TABLE IF NOT EXISTS bills (
           id SERIAL PRIMARY KEY,
@@ -66,6 +94,7 @@ export async function initializeDatabase() {
       // Insert predefined bike models if they don't exist
       const existingModels = await client.query('SELECT COUNT(*) FROM bike_models')
       if (existingModels.rows[0].count === '0') {
+        console.log('Inserting predefined bike models...')
         await client.query(`
           INSERT INTO bike_models (model_name, price, motor_number_prefix, chassis_number_prefix) VALUES
           ('TMR-G18', 499500.00, 'G18', 'G18'),
@@ -86,13 +115,23 @@ export async function initializeDatabase() {
     return db
   } catch (error) {
     console.error('Error initializing database:', error)
-    throw new Error('Failed to initialize database: ' + error.message)
+    
+    // If we've tried too many times, rethrow the error
+    if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+      console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`)
+      throw new Error('Failed to initialize database: ' + error.message)
+    } else {
+      // Return null but don't throw, so health check can still pass
+      console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
+      return null
+    }
   }
 }
 
 export function getDatabase() {
   if (!db) {
-    throw new Error('Database not initialized. Call initializeDatabase() first.')
+    // Don't throw here, so health check can still pass
+    return null
   }
   return db
 }

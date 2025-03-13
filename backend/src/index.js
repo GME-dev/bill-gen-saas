@@ -7,29 +7,49 @@ dotenv.config()
 
 const port = process.env.PORT || 3000
 let server
+let dbInitialized = false
+
+console.log('Starting server with environment:', process.env.NODE_ENV);
+console.log('CORS origin:', process.env.CORS_ORIGIN);
+console.log('Port:', port);
 
 async function startServer() {
+  // Always start the server first, so health checks can pass
+  server = app.listen(port, () => {
+    console.log(`Server running on port ${port}`)
+  })
+
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Shutting down gracefully...')
+    server.close(() => {
+      console.log('Server closed')
+      process.exit(0)
+    })
+  })
+
+  // Try to initialize database but don't let it crash the startup
   try {
     console.log('Initializing database connection...')
     await initializeDatabase()
     console.log('Database connection established')
-
-    server = app.listen(port, () => {
-      console.log(`Server running on port ${port}`)
-    })
-
-    // Handle graceful shutdown
-    process.on('SIGTERM', () => {
-      console.log('SIGTERM received. Shutting down gracefully...')
-      server.close(() => {
-        console.log('Server closed')
-        process.exit(0)
-      })
-    })
-
+    dbInitialized = true
   } catch (error) {
-    console.error('Failed to start server:', error)
-    process.exit(1)
+    console.error('Failed to initialize database:', error)
+    console.log('Server will continue running - health checks may temporarily fail')
+    
+    // Retry database connection every 10 seconds
+    const retryInterval = setInterval(async () => {
+      try {
+        console.log('Retrying database connection...')
+        await initializeDatabase()
+        console.log('Database connection established after retry')
+        dbInitialized = true
+        clearInterval(retryInterval)
+      } catch (error) {
+        console.error('Database connection retry failed:', error)
+      }
+    }, 10000)
   }
 }
 
