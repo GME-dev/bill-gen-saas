@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals'
-import { signatureManager } from '../utils/signatureManager'
+import { signatureManager } from '../utils/signatureManager.js'
 import fs from 'fs'
 import path from 'path'
 import { PDFDocument } from 'pdf-lib'

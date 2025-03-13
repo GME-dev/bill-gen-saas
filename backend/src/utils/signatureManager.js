@@ -316,5 +316,4 @@ export class SignatureManager {
   }
 }
 
-// Export a singleton instance
 export const signatureManager = new SignatureManager() 

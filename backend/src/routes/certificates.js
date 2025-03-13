@@ -1,36 +1,26 @@
-const express = require('express')
+import express from 'express'
+import multer from 'multer'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import { signatureManager } from '../utils/signatureManager.js'
+
 const router = express.Router()
-const multer = require('multer')
-const path = require('path')
-const fs = require('fs').promises
-const { exec } = require('child_process')
-const { promisify } = require('util')
-const execAsync = promisify(exec)
-const signatureManager = require('../utils/signatureManager')
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-// Configure multer for certificate upload
+// Configure multer for certificate uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../assets/certificates'))
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, '../../assets/certificates'))
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname))
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname)
   }
 })
 
-const upload = multer({
-  storage,
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['.p12', '.pfx']
-    const ext = path.extname(file.originalname).toLowerCase()
-    if (allowedTypes.includes(ext)) {
-      cb(null, true)
-    } else {
-      cb(new Error('Invalid file type. Only .p12 and .pfx files are allowed.'))
-    }
-  }
-})
+const upload = multer({ storage: storage })
 
 // Get all certificates
 router.get('/', async (req, res) => {
@@ -119,4 +109,4 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
-module.exports = router 
+export default router 

@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals'
-import { generatePDF } from '../utils/pdfGenerator'
-import { signatureManager } from '../utils/signatureManager'
+import { generatePDF } from '../utils/pdfGenerator.js'
+import { signatureManager } from '../utils/signatureManager.js'
 import { PDFDocument } from 'pdf-lib'
 import fs from 'fs'
 import request from 'supertest'

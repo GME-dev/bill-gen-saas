@@ -1,369 +1,320 @@
-import { PDFDocument, rgb } from 'pdf-lib'
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
 import fs from 'fs'
 import path from 'path'
-import { fontManager } from './fontManager'
-import { signatureManager } from './signatureManager'
-import { COMPANY_INFO } from '../config/constants'
+import { fileURLToPath } from 'url'
+import { dirname } from 'path'
+import { fontManager } from './fontManager.js'
+import { COMPANY_INFO, PDF_SETTINGS, BRANDING_CONFIG } from '../config/constants.js'
 
-export async function generatePDF(bill, options = {}) {
-  try {
-    // Create a new PDF document
-    const pdfDoc = await PDFDocument.create()
-    
-    // Load branding configuration
-    const branding = await fontManager.loadBrandingConfig()
-    
-    // Load fonts with subsetting
-    const fonts = await fontManager.getFonts()
-    const primaryFont = await fontManager.embedFont(pdfDoc, fonts.primary.regular, {
-      elementType: 'heading',
-      text: COMPANY_INFO.name
-    })
-    const primaryBoldFont = await fontManager.embedFont(pdfDoc, fonts.primary.bold, {
-      elementType: 'heading',
-      text: 'BILL INFORMATION CUSTOMER INFORMATION BILL ITEMS PAYMENT TERMS'
-    })
-    const secondaryFont = await fontManager.embedFont(pdfDoc, fonts.secondary.regular, {
-      elementType: 'body',
-      text: `${COMPANY_INFO.address} ${COMPANY_INFO.phone} ${COMPANY_INFO.email} ${bill.customer_name} ${bill.customer_nic} ${bill.customer_address} ${COMPANY_INFO.payment_terms}`
-    })
-    const secondaryBoldFont = await fontManager.embedFont(pdfDoc, fonts.secondary.bold, {
-      elementType: 'table',
-      text: 'Product Name Quantity Unit Price Total Price'
-    })
-    
-    // Convert brand colors to RGB
-    const primaryColor = fontManager.hexToRGB(branding.colors.primary)
-    const secondaryColor = fontManager.hexToRGB(branding.colors.secondary)
-    const textColor = fontManager.hexToRGB(branding.colors.text)
-    
-    // Add a page
-    const page = pdfDoc.addPage([595.28, 841.89]) // A4 size
-    
-    // Set margins
-    const margin = 50
-    const { width, height } = page.getSize()
-    const contentWidth = width - 2 * margin
-    const contentHeight = height - 2 * margin
-    
-    // Helper function for text positioning with typography settings
-    let currentY = height - margin - 30
-    
-    // Load and draw logo if available
-    const logoPath = await fontManager.getLogo()
-    if (logoPath && fs.existsSync(logoPath)) {
-      const logoImage = await pdfDoc.embedJpg(fs.readFileSync(logoPath))
-      const logoDims = logoImage.scale(0.5) // Adjust scale as needed
-      page.drawImage(logoImage, {
-        x: margin,
-        y: currentY - logoDims.height,
-        width: logoDims.width,
-        height: logoDims.height,
-      })
-      currentY -= logoDims.height + 20
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+export class PDFGenerator {
+    constructor() {
+        this.fontManager = fontManager
+        this.pageWidth = 595.28;  // A4 width in points
+        this.pageHeight = 841.89;  // A4 height in points
+        this.margin = 50;
+        this.logoPath = path.join(__dirname, '../assets/logo.png')
     }
-    
-    // Draw header with custom fonts and colors
-    page.drawText(COMPANY_INFO.name, {
-      x: margin,
-      y: currentY,
-      size: 24,
-      font: primaryFont,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-      lineHeight: fontManager.getTypographySettings('heading').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('heading').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('heading').wordSpacing,
-    })
-    
-    currentY -= 20
-    page.drawText(COMPANY_INFO.address, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`Phone: ${COMPANY_INFO.phone}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`Email: ${COMPANY_INFO.email}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    // Draw separator line with brand color
-    currentY -= 20
-    page.drawLine({
-      start: { x: margin, y: currentY },
-      end: { x: width - margin, y: currentY },
-      thickness: 1,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-    })
-    
-    // Bill information with custom fonts and typography
-    currentY -= 30
-    page.drawText('BILL INFORMATION', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: primaryBoldFont,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-      lineHeight: fontManager.getTypographySettings('heading').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('heading').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('heading').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`Bill Number: ${bill.bill_number}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`Date: ${new Date(bill.date).toLocaleDateString()}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    // Customer information
-    currentY -= 30
-    page.drawText('CUSTOMER INFORMATION', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: primaryBoldFont,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-      lineHeight: fontManager.getTypographySettings('heading').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('heading').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('heading').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`Name: ${bill.customer_name}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`NIC: ${bill.customer_nic}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(`Address: ${bill.customer_address}`, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    // Bill items table
-    currentY -= 30
-    page.drawText('BILL ITEMS', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: primaryBoldFont,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-      lineHeight: fontManager.getTypographySettings('heading').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('heading').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('heading').wordSpacing,
-    })
-    
-    // Table headers with custom styling and typography
-    currentY -= 20
-    const columnWidths = [250, 80, 100, 100]
-    const headers = ['Product Name', 'Quantity', 'Unit Price', 'Total Price']
-    
-    headers.forEach((header, index) => {
-      let x = margin
-      for (let i = 0; i < index; i++) {
-        x += columnWidths[i]
-      }
-      page.drawText(header, {
-        x,
-        y: currentY,
-        size: 12,
-        font: secondaryBoldFont,
-        color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-        lineHeight: fontManager.getTypographySettings('table').lineHeight,
-        letterSpacing: fontManager.getTypographySettings('table').letterSpacing,
-        wordSpacing: fontManager.getTypographySettings('table').wordSpacing,
-      })
-    })
-    
-    // Table rows with custom styling and typography
-    currentY -= 15
-    bill.items.forEach(item => {
-      if (currentY < margin + 100) {
-        // Add new page if content exceeds page height
-        page = pdfDoc.addPage([595.28, 841.89])
-        currentY = height - margin - 30
-      }
-      
-      let x = margin
-      const values = [
-        item.product_name,
-        item.quantity.toString(),
-        item.unit_price.toFixed(2),
-        item.total_price.toFixed(2)
-      ]
-      
-      values.forEach((value, index) => {
-        page.drawText(value, {
-          x,
-          y: currentY,
-          size: 12,
-          font: secondaryFont,
-          color: rgb(textColor.r, textColor.g, textColor.b),
-          lineHeight: fontManager.getTypographySettings('table').lineHeight,
-          letterSpacing: fontManager.getTypographySettings('table').letterSpacing,
-          wordSpacing: fontManager.getTypographySettings('table').wordSpacing,
-        })
-        x += columnWidths[index]
-      })
-      
-      currentY -= 15
-    })
-    
-    // Total amount
-    currentY -= 20
-    const totalAmount = bill.items.reduce((sum, item) => sum + item.total_price, 0)
-    page.drawText(`Total Amount: Rs. ${totalAmount.toFixed(2)}`, {
-      x: margin + columnWidths[0] + columnWidths[1] + columnWidths[2],
-      y: currentY,
-      size: 14,
-      font: secondaryBoldFont,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-      lineHeight: fontManager.getTypographySettings('table').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('table').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('table').wordSpacing,
-    })
-    
-    // Payment terms
-    currentY -= 30
-    page.drawText('PAYMENT TERMS', {
-      x: margin,
-      y: currentY,
-      size: 14,
-      font: primaryBoldFont,
-      color: rgb(primaryColor.r, primaryColor.g, primaryColor.b),
-      lineHeight: fontManager.getTypographySettings('heading').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('heading').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('heading').wordSpacing,
-    })
-    
-    currentY -= 15
-    page.drawText(COMPANY_INFO.payment_terms, {
-      x: margin,
-      y: currentY,
-      size: 12,
-      font: secondaryFont,
-      color: rgb(textColor.r, textColor.g, textColor.b),
-      lineHeight: fontManager.getTypographySettings('body').lineHeight,
-      letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-      wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-    })
-    
-    // Add signature field if requested
-    if (options.signature) {
-      currentY -= 30
-      const signatureField = await signatureManager.createSignatureField(pdfDoc, {
-        x: margin,
-        y: currentY,
-        width: 200,
-        height: 50,
-        pageIndex: page.getIndex(),
-        visible: true,
-        text: 'Digitally signed by',
-        fontSize: 12,
-        color: { r: 0, g: 0, b: 0 },
-        border: true,
-        background: { r: 1, g: 1, b: 1 }
-      })
+
+    drawTableRow(page, x, y, columns, font, fontSize = 12, bold = false) {
+        const colWidths = [200, 200];  // Adjust column widths as needed
+        const padding = 10;
+        const rowHeight = 25;
+
+        // Draw cell borders and background
+        page.drawRectangle({
+            x,
+            y: y - rowHeight,
+            width: colWidths[0] + colWidths[1],
+            height: rowHeight,
+            borderWidth: 1,
+            borderColor: rgb(0.8, 0.8, 0.8),
+            color: bold ? rgb(0.95, 0.95, 0.95) : rgb(1, 1, 1),
+        });
+
+        // Draw vertical line between columns
+        page.drawLine({
+            start: { x: x + colWidths[0], y },
+            end: { x: x + colWidths[0], y: y - rowHeight },
+            thickness: 1,
+            color: rgb(0.8, 0.8, 0.8),
+        });
+
+        // Draw text in cells
+        columns.forEach((text, index) => {
+            page.drawText(text, {
+                x: x + (index === 0 ? padding : colWidths[0] + padding),
+                y: y - rowHeight + padding,
+                size: fontSize,
+                font,
+            });
+        });
+
+        return y - rowHeight;
     }
-    
-    // Add page numbers
-    const pages = pdfDoc.getPages()
-    pages.forEach((page, index) => {
-      const { width, height } = page.getSize()
-      page.drawText(`Page ${index + 1} of ${pages.length}`, {
-        x: width - margin - 50,
-        y: margin,
-        size: 10,
-        font: secondaryFont,
-        color: rgb(textColor.r, textColor.g, textColor.b),
-        lineHeight: fontManager.getTypographySettings('body').lineHeight,
-        letterSpacing: fontManager.getTypographySettings('body').letterSpacing,
-        wordSpacing: fontManager.getTypographySettings('body').wordSpacing,
-      })
-    })
-    
-    // Save the PDF
-    let pdfBytes = await pdfDoc.save()
-    
-    // Apply digital signature if requested
-    if (options.signature) {
-      pdfBytes = await signatureManager.signPDF(pdfBytes, {
-        certificateName: options.signature.certificateName,
-        password: options.signature.password,
-        signatureType: options.signature.type || 'visible',
-        appearance: options.signature.appearance,
-        timestamp: options.signature.timestamp !== false
-      })
+
+    async generateBill(bill) {
+        try {
+            const pdfDoc = await PDFDocument.create()
+            const page = pdfDoc.addPage([this.pageWidth, this.pageHeight])
+            const { width, height } = page.getSize()
+            
+            // Get the standard font
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
+            const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+            
+            // Bill details (right aligned)
+            const billNoText = `Bill No: ${bill.id}`
+            const billNoWidth = font.widthOfTextAtSize(billNoText, 12)
+            page.drawText(billNoText, {
+                x: width - this.margin - billNoWidth,
+                y: height - this.margin,
+                size: 12,
+                font: boldFont,
+            })
+
+            const dateText = `Date: ${new Date(bill.bill_date).toLocaleDateString()}`
+            const dateWidth = font.widthOfTextAtSize(dateText, 12)
+            page.drawText(dateText, {
+                x: width - this.margin - dateWidth,
+                y: height - this.margin - 20,
+                size: 12,
+                font,
+            })
+            
+            try {
+                // Load and embed the logo image from local file
+                const logoImageBytes = await fs.promises.readFile(this.logoPath)
+                const logoImage = await pdfDoc.embedPng(logoImageBytes)
+                
+                // Calculate logo dimensions (maintain aspect ratio)
+                const logoWidth = 70
+                const logoHeight = logoWidth
+                
+                // Draw logo at left side with adjusted position
+                page.drawImage(logoImage, {
+                    x: this.margin,
+                    y: height - this.margin - logoHeight + 25,  // Adjusted position
+                    width: logoWidth,
+                    height: logoHeight,
+                })
+            } catch (error) {
+                console.error('Error embedding logo:', error)
+            }
+
+            // Draw company name with adjusted position and size
+            page.drawText('TMR TRADING LANKA (PVT) LTD', {
+                x: this.margin + 85,  // Adjusted position
+                y: height - this.margin - 20,  // Aligned with bill number
+                size: 18,  // Increased size
+                font: boldFont,
+            })
+
+            // Dealer information with adjusted spacing
+            page.drawText('GUNAWARDANA MOTORS, EMBILIPITIYA', {
+                x: this.margin,
+                y: height - this.margin - 60,  // Adjusted spacing
+                size: 14,
+                font: boldFont,
+            })
+
+            page.drawText('AUTHORIZED DEALER - EMBILIPITIYA', {
+                x: this.margin,
+                y: height - this.margin - 80,  // Adjusted spacing
+                size: 12,
+                font: boldFont,
+            })
+
+            // Customer Information with adjusted spacing
+            const customerY = height - this.margin - 130  // Increased gap after header
+            page.drawText('Customer Details:', {
+                x: this.margin,
+                y: customerY,
+                size: 14,
+                font: boldFont,
+            })
+
+            const customerDetails = [
+                `Name: ${bill.customer_name}`,
+                `NIC: ${bill.customer_nic}`,
+                `Address: ${bill.customer_address}`,
+            ]
+
+            customerDetails.forEach((line, index) => {
+                page.drawText(line, {
+                    x: this.margin,
+                    y: customerY - 25 - (index * 20),
+                    size: 12,
+                    font,
+                })
+            })
+
+            // Vehicle Information
+            const vehicleY = customerY - 120
+            page.drawText('Vehicle Details:', {
+                x: this.margin,
+                y: vehicleY,
+                size: 14,
+                font: boldFont,
+            })
+
+            const vehicleDetails = [
+                `Model: ${bill.model_name}`,
+                `Motor Number: ${bill.motor_number}`,
+                `Chassis Number: ${bill.chassis_number}`,
+            ]
+
+            vehicleDetails.forEach((line, index) => {
+                page.drawText(line, {
+                    x: this.margin,
+                    y: vehicleY - 25 - (index * 20),
+                    size: 12,
+                    font,
+                })
+            })
+
+            // Payment Information
+            const paymentY = vehicleY - 120
+            page.drawText('Payment Details:', {
+                x: this.margin,
+                y: paymentY,
+                size: 14,
+                font: boldFont,
+            })
+
+            // Draw payment details table
+            let tableY = paymentY - 30
+            
+            // Table header
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Description', 'Amount (Rs.)'],
+                boldFont,
+                12,
+                true
+            )
+
+            // Table rows
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Bike Price', bill.bike_price.toLocaleString()],
+                font
+            )
+
+            // RMV section
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['RMV Charge', bill.bill_type === 'cash' ? '13,000' : 'CPZ'],
+                font
+            )
+
+            if (bill.bill_type === 'leasing') {
+                tableY = this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Down Payment', bill.down_payment.toLocaleString()],
+                    font
+                )
+            }
+
+            // Total row with (D/P) for leasing
+            this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Total Amount', bill.bill_type === 'leasing' ? 
+                    `${bill.down_payment.toLocaleString()} (D/P)` : 
+                    (bill.bike_price + 13000).toLocaleString()],
+                boldFont,
+                12,
+                true
+            )
+
+            // Terms and Conditions
+            const termsY = tableY - 80
+            page.drawText('Terms and Conditions:', {
+                x: this.margin,
+                y: termsY,
+                size: 12,
+                font: boldFont,
+            })
+
+            const terms = [
+                '1. All prices are inclusive of taxes.',
+                '2. Warranty is subject to terms and conditions.',
+                '3. This is a computer-generated bill.',
+                bill.bill_type === 'leasing' ? 
+                    '4. Balance amount will be settled by the leasing company.' :
+                    '4. RMV registration will be completed within 30 days.'
+            ]
+
+            terms.forEach((line, index) => {
+                page.drawText(line, {
+                    x: this.margin,
+                    y: termsY - 20 - (index * 15),
+                    size: 10,
+                    font,
+                    color: rgb(0.3, 0.3, 0.3),
+                })
+            })
+
+            // Footer
+            page.drawText('Thank you for your business!', {
+                x: width / 2 - 70,
+                y: this.margin + 15,
+                size: 12,
+                font: boldFont,
+            })
+
+            // Signatures
+            const signatureY = this.margin + 60
+            
+            // Dealer signature
+            page.drawLine({
+                start: { x: this.margin, y: signatureY },
+                end: { x: this.margin + 150, y: signatureY },
+                thickness: 1,
+                color: rgb(0, 0, 0),
+            })
+            
+            page.drawText('Dealer Signature', {
+                x: this.margin,
+                y: signatureY - 15,
+                size: 10,
+                font,
+            })
+
+            // Rubber stamp line
+            page.drawLine({
+                start: { x: width - this.margin - 150, y: signatureY },
+                end: { x: width - this.margin, y: signatureY },
+                thickness: 1,
+                color: rgb(0, 0, 0),
+            })
+            
+            page.drawText('Rubber Stamp', {
+                x: width - this.margin - 150,
+                y: signatureY - 15,
+                size: 10,
+                font,
+            })
+
+            // Generate PDF
+            return await pdfDoc.save()
+        } catch (error) {
+            console.error('Error generating PDF:', error)
+            throw new Error(`Failed to generate PDF: ${error.message}`)
+        }
     }
-    
-    return pdfBytes
-  } catch (error) {
-    throw new Error(`Failed to generate PDF: ${error.message}`)
-  }
-} 
+}
+
+export default PDFGenerator 

@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals'
-import { FontSubsetter } from '../utils/fontSubsetter'
+import { FontSubsetter } from '../utils/fontSubsetter.js'
 import fs from 'fs'
 import path from 'path'
 import Font from 'fontkit'

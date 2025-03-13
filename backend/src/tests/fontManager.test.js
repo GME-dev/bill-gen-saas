@@ -1,5 +1,5 @@
 import { jest } from '@jest/globals'
-import { fontManager } from '../utils/fontManager'
+import { fontManager } from '../utils/fontManager.js'
 import fs from 'fs'
 import path from 'path'
 import request from 'supertest'

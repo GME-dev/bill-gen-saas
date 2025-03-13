@@ -1,30 +1,27 @@
 import express from 'express'
 import { getDatabase } from '../utils/database.js'
 import { generateBill } from '../utils/billGenerator.js'
-import { generatePDF } from '../utils/pdfGenerator.js'
+import { PDFGenerator } from '../utils/pdfGenerator.js'
 
 const router = express.Router()
-const db = getDatabase()
+const pdfGenerator = new PDFGenerator()
 
 // Get all bills
 router.get('/', async (req, res) => {
   try {
-    const bills = await db.all(`
-      SELECT b.*, GROUP_CONCAT(bi.product_name) as products
-      FROM bills b
-      LEFT JOIN bill_items bi ON b.id = bi.bill_id
-      GROUP BY b.id
-      ORDER BY b.created_at DESC
-    `)
+    const db = getDatabase()
+    const bills = await db.all('SELECT * FROM bills ORDER BY bill_date DESC')
     res.json(bills)
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    console.error('Error fetching bills:', error)
+    res.status(500).json({ error: 'Failed to fetch bills' })
   }
 })
 
 // Get a single bill
 router.get('/:id', async (req, res) => {
   try {
+    const db = getDatabase()
     const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
@@ -35,44 +32,71 @@ router.get('/:id', async (req, res) => {
     
     res.json(bill)
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    console.error('Error fetching bill:', error)
+    res.status(500).json({ error: 'Failed to fetch bill' })
   }
 })
 
 // Create a new bill
 router.post('/', async (req, res) => {
-  const { customer_name, customer_nic, customer_address, bill_date, due_date, items } = req.body
-  
   try {
-    const total_amount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
-    
-    const result = await db.run(`
-      INSERT INTO bills (
-        customer_name, customer_nic, customer_address,
-        bill_date, due_date, total_amount
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `, [customer_name, customer_nic, customer_address, bill_date, due_date, total_amount])
-    
-    const bill_id = result.lastID
-    
-    // Insert bill items
-    for (const item of items) {
-      await db.run(`
-        INSERT INTO bill_items (
-          bill_id, product_name, quantity, unit_price, total_price
-        ) VALUES (?, ?, ?, ?, ?)
-      `, [bill_id, item.product_name, item.quantity, item.unit_price, item.quantity * item.unit_price])
-    }
-    
-    res.status(201).json({ id: bill_id, message: 'Bill created successfully' })
+    const {
+      bill_type,
+      customer_name,
+      customer_nic,
+      customer_address,
+      model_name,
+      motor_number,
+      chassis_number,
+      bike_price,
+      down_payment
+    } = req.body
+
+    // Calculate total amount based on bill type
+    const total_amount = bill_type === 'leasing' ? 
+      down_payment : // For leasing, total is same as down payment
+      bike_price + 13000; // For cash, add RMV charge
+
+    const db = getDatabase()
+    const result = await db.run(
+      `INSERT INTO bills (
+        bill_type,
+        customer_name,
+        customer_nic,
+        customer_address,
+        model_name,
+        motor_number,
+        chassis_number,
+        bike_price,
+        down_payment,
+        total_amount
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        bill_type,
+        customer_name,
+        customer_nic,
+        customer_address,
+        model_name,
+        motor_number,
+        chassis_number,
+        bike_price,
+        down_payment,
+        total_amount
+      ]
+    )
+
+    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [result.lastID])
+    res.status(201).json(bill)
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    console.error('Error creating bill:', error)
+    res.status(500).json({ error: 'Failed to create bill' })
   }
 })
 
 // Generate bill document (DOCX)
 router.get('/:id/generate', async (req, res) => {
   try {
+    const db = getDatabase()
     const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
@@ -91,24 +115,26 @@ router.get('/:id/generate', async (req, res) => {
   }
 })
 
-// Generate bill document (PDF)
-router.get('/:id/generate-pdf', async (req, res) => {
+// Generate PDF for a bill
+router.get('/:id/pdf', async (req, res) => {
   try {
+    const db = getDatabase()
     const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
+
+    const pdfBytes = await pdfGenerator.generateBill(bill)
     
-    const items = await db.all('SELECT * FROM bill_items WHERE bill_id = ?', [req.params.id])
-    bill.items = items
-    
-    const pdfBuffer = await generatePDF(bill)
-    
+    // Set response headers
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill.id}.pdf`)
-    res.send(pdfBuffer)
+    res.setHeader('Content-Disposition', `${req.query.preview ? 'inline' : 'attachment'}; filename=bill-${bill.id}.pdf`)
+    
+    // Send PDF
+    res.send(Buffer.from(pdfBytes))
   } catch (error) {
-    res.status(500).json({ error: error.message })
+    console.error('Error generating PDF:', error)
+    res.status(500).json({ error: 'Failed to generate PDF' })
   }
 })
 
@@ -141,13 +167,52 @@ router.get('/preview', async (req, res) => {
       ]
     }
     
-    const pdfBuffer = await generatePDF(sampleBill)
+    const pdfBuffer = await pdfGenerator.generateBill(sampleBill)
     
     res.setHeader('Content-Type', 'application/pdf')
     res.setHeader('Content-Disposition', 'inline; filename=preview.pdf')
     res.send(pdfBuffer)
   } catch (error) {
     res.status(500).json({ error: error.message })
+  }
+})
+
+// Update bill
+router.put('/:id', async (req, res) => {
+  try {
+    const db = getDatabase()
+    res.json({ message: 'Update bill endpoint' });
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// Update a bill's status
+router.patch('/:id', async (req, res) => {
+  try {
+    const { status } = req.body
+    const db = getDatabase()
+    await db.run(
+      'UPDATE bills SET status = ? WHERE id = ?',
+      [status, req.params.id]
+    )
+    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
+    res.json(bill)
+  } catch (error) {
+    console.error('Error updating bill:', error)
+    res.status(500).json({ error: 'Failed to update bill' })
+  }
+})
+
+// Delete bill
+router.delete('/:id', async (req, res) => {
+  try {
+    const db = getDatabase()
+    await db.run('DELETE FROM bills WHERE id = ?', [req.params.id])
+    res.status(204).send()
+  } catch (error) {
+    console.error('Error deleting bill:', error)
+    res.status(500).json({ error: 'Failed to delete bill' })
   }
 })
 

@@ -2,60 +2,105 @@ import sqlite3 from 'sqlite3'
 import { open } from 'sqlite'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import fs from 'fs'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const projectRoot = join(__dirname, '../..')
 
 let db = null
 
 export async function initializeDatabase() {
-  if (db) return db
+  if (db) {
+    try {
+      // Test the connection
+      await db.get('SELECT 1')
+      return db
+    } catch (error) {
+      console.log('Database connection lost, reconnecting...')
+      db = null
+    }
+  }
 
-  db = await open({
-    filename: join(__dirname, '../../data/bills.db'),
-    driver: sqlite3.Database
-  })
+  try {
+    // Create data directory if it doesn't exist
+    const dataDir = join(projectRoot, 'data')
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true })
+    }
 
-  // Create tables
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS bills (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      customer_name TEXT NOT NULL,
-      customer_nic TEXT NOT NULL,
-      customer_address TEXT NOT NULL,
-      bill_date TEXT NOT NULL,
-      due_date TEXT NOT NULL,
-      total_amount REAL NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
+    const dbPath = join(dataDir, 'bills.db')
+    console.log('Database path:', dbPath)
 
-    CREATE TABLE IF NOT EXISTS bill_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      bill_id INTEGER NOT NULL,
-      product_name TEXT NOT NULL,
-      quantity INTEGER NOT NULL,
-      unit_price REAL NOT NULL,
-      total_price REAL NOT NULL,
-      FOREIGN KEY (bill_id) REFERENCES bills (id)
-    );
+    // Ensure the database file exists
+    if (!fs.existsSync(dbPath)) {
+      fs.writeFileSync(dbPath, '')
+    }
 
-    CREATE TABLE IF NOT EXISTS products (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      description TEXT,
-      unit_price REAL NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `)
+    db = await open({
+      filename: dbPath,
+      driver: sqlite3.Database
+    })
 
-  return db
+    // Enable foreign keys
+    await db.run('PRAGMA foreign_keys = ON')
+    await db.run('PRAGMA journal_mode = WAL')
+
+    // Create tables
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS bills (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bill_type TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_nic TEXT NOT NULL,
+        customer_address TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        motor_number TEXT NOT NULL,
+        chassis_number TEXT NOT NULL,
+        bike_price REAL NOT NULL,
+        down_payment REAL DEFAULT 0,
+        total_amount REAL NOT NULL,
+        bill_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        status TEXT DEFAULT 'pending'
+      );
+
+      CREATE TABLE IF NOT EXISTS bike_models (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        model_name TEXT NOT NULL UNIQUE,
+        price REAL NOT NULL,
+        motor_number_prefix TEXT,
+        chassis_number_prefix TEXT
+      );
+
+      -- Insert predefined bike models
+      INSERT OR IGNORE INTO bike_models (model_name, price) VALUES
+        ('TMR-G18', 499500),
+        ('TMR-MNK3', 475000),
+        ('TMR-Q1', 449500),
+        ('TMR-ZL', 399500),
+        ('TMR-ZS', 349500),
+        ('TMR-XGW', 299500),
+        ('TMR-COLA5', 249500),
+        ('TMR-X01', 219500);
+
+      -- Remove unused tables
+      DROP TABLE IF EXISTS bill_items;
+      DROP TABLE IF EXISTS products;
+    `)
+
+    // Test the connection
+    await db.get('SELECT 1')
+    console.log('Database initialized successfully')
+    return db
+  } catch (error) {
+    console.error('Database initialization error:', error)
+    throw new Error(`Failed to initialize database: ${error.message}`)
+  }
 }
 
 export function getDatabase() {
   if (!db) {
-    throw new Error('Database not initialized')
+    throw new Error('Database not initialized. Please ensure initializeDatabase() is called first.')
   }
   return db
 } 

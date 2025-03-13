@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import fs from 'fs'
@@ -44,31 +45,31 @@ export class FontManager {
 
   async embedFont(pdfDoc, fontPath, options = {}) {
     const { text = '', elementType = 'body' } = options
-    const cacheKey = `${fontPath}-${elementType}-${text}`
+    const cacheKey = `${fontPath}-${elementType}`
     
     if (fontCache.has(cacheKey)) {
       return fontCache.get(cacheKey)
     }
 
     try {
-      // Get typography settings for the element
-      const typographySettings = this.fontSubsetter.getTypographySettings(elementType)
+      // Register fontkit with the PDFDocument instance
+      pdfDoc.registerFontkit(fontkit)
       
-      // Create font subset if text is provided
-      let finalFontPath = fontPath
-      if (text) {
-        finalFontPath = await this.fontSubsetter.createSubset(fontPath, text)
-      }
-
-      const fontBuffer = await fs.promises.readFile(finalFontPath)
-      const font = await pdfDoc.embedFont(fontBuffer, {
-        ...typographySettings,
-        features: typographySettings.openTypeFeatures
-      })
+      // Get typography settings for the element
+      const typographySettings = this.getTypographySettings(elementType)
+      
+      // Construct the full font path
+      const fullFontPath = path.join(this.fontsDir, fontPath)
+      console.log('Loading font from:', fullFontPath)
+      
+      // Read and embed the full font without subsetting
+      const fontBuffer = await fs.promises.readFile(fullFontPath)
+      const font = await pdfDoc.embedFont(fontBuffer)
 
       fontCache.set(cacheKey, font)
       return font
     } catch (error) {
+      console.error('Font embedding error:', error)
       throw new Error(`Failed to embed font: ${error.message}`)
     }
   }
@@ -146,25 +147,21 @@ export class FontManager {
   }
 
   async getFonts() {
-    const fontsDir = path.join(process.cwd(), 'assets', 'fonts')
-    
-    // Load primary font (Roboto)
-    const primaryRegular = await this.loadFont(path.join(fontsDir, 'Roboto-Regular.ttf'))
-    const primaryBold = await this.loadFont(path.join(fontsDir, 'Roboto-Bold.ttf'))
-    
-    // Load secondary font (Open Sans)
-    const secondaryRegular = await this.loadFont(path.join(fontsDir, 'OpenSans-Regular.ttf'))
-    const secondaryBold = await this.loadFont(path.join(fontsDir, 'OpenSans-Bold.ttf'))
-    
-    return {
-      primary: {
-        regular: primaryRegular,
-        bold: primaryBold
-      },
-      secondary: {
-        regular: secondaryRegular,
-        bold: secondaryBold
+    try {
+      // Return font filenames only
+      return {
+        primary: {
+          regular: 'Roboto-Regular.ttf',
+          bold: 'Roboto-Bold.ttf'
+        },
+        secondary: {
+          regular: 'OpenSans-Regular.ttf',
+          bold: 'OpenSans-Bold.ttf'
+        }
       }
+    } catch (error) {
+      console.error('Error loading fonts:', error)
+      throw new Error(`Failed to load fonts: ${error.message}`)
     }
   }
 

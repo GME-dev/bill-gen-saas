@@ -1,4 +1,4 @@
-import { Font } from 'fontkit'
+import fontkit from '@pdf-lib/fontkit'
 import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
@@ -15,7 +15,7 @@ export class FontSubsetter {
     }
 
     // Create a font object from the bytes
-    const font = Font.create(fontBytes)
+    const font = fontkit.create(fontBytes)
     
     // Get unique characters from the text
     const chars = [...new Set(text)].join('')

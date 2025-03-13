@@ -12,6 +12,7 @@ import certificatesRouter from './routes/certificates.js'
 import pdfGeneratorRouter from './routes/pdfGenerator.js'
 import fontManagerRouter from './routes/fontManager.js'
 import healthRouter from './routes/health.js'
+import bikeModelsRouter from './routes/bike-models.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -23,15 +24,21 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 // Middleware
-app.use(cors())
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Content-Disposition'],
+  exposedHeaders: ['Content-Disposition'],
+  credentials: true
+}))
 app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
 app.use(morgan('dev'))
-app.use(helmet())
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: process.env.RATE_LIMIT_WINDOW * 60 * 1000 || 15 * 60 * 1000, // 15 minutes
-  max: process.env.RATE_LIMIT_MAX_REQUESTS || 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
 })
 app.use(limiter)
 
@@ -41,6 +48,12 @@ app.use('/api/certificates', certificatesRouter)
 app.use('/api/pdf', pdfGeneratorRouter)
 app.use('/api/fonts', fontManagerRouter)
 app.use('/api/health', healthRouter)
+app.use('/api/bike-models', bikeModelsRouter)
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() })
+})
 
 // Error handling middleware
 app.use((err, req, res, next) => {

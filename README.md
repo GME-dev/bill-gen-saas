@@ -1,185 +1,78 @@
-# Bill Generation SaaS with Digital Signatures
+# Electric Scooter Bill Generator
 
-A modern web application for generating and digitally signing PDF bills with support for custom fonts and certificates.
+A web application for generating and managing electric scooter bills, supporting both cash sales and leasing options.
 
 ## Features
 
-- PDF bill generation with custom templates
-- Digital signature support with certificate management
-- Font subsetting for optimized PDFs
-- Certificate revocation checking
-- Timestamping service integration
-- Modern React frontend
-- Secure backend API
-- Docker containerization
-- CI/CD pipeline with GitHub Actions
+- Create and manage bills for electric scooter sales
+- Support for both cash sales and leasing options
+- Automatic price calculation based on bike model
+- PDF bill generation with professional layout
+- Bill preview and download functionality
+- Secure bill storage and management
 
-## Prerequisites
+## Tech Stack
 
-- Node.js 18 or later
-- Docker and Docker Compose
-- Git
-- A timestamping service account (e.g., DigiCert)
-- SSL certificates for production
+- **Frontend**: React.js with Vite, TailwindCSS
+- **Backend**: Node.js, Express.js
+- **Database**: SQLite
+- **PDF Generation**: pdf-lib
 
-## Installation
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+
+### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/bill-gen-saas.git
-cd bill-gen-saas
+git clone [repository-url]
+cd electric-scooter-bill-generator
 ```
 
 2. Install dependencies:
 ```bash
+# Install backend dependencies
+cd backend
 npm install
-cd frontend && npm install
-cd ../backend && npm install
+
+# Install frontend dependencies
+cd ../frontend
+npm install
 ```
 
-3. Create environment files:
+3. Set up environment variables:
 ```bash
+# In backend directory
 cp .env.example .env
-cp frontend/.env.example frontend/.env
-cp backend/.env.example backend/.env
 ```
 
-4. Update the environment variables in the `.env` files with your configuration.
-
-## Development
-
-1. Start the development servers:
+4. Start the development servers:
 ```bash
-# Terminal 1 - Backend
-cd backend
+# Start backend server (from backend directory)
 npm run dev
 
-# Terminal 2 - Frontend
-cd frontend
+# Start frontend server (from frontend directory)
 npm run dev
 ```
 
-2. Access the application at `http://localhost:3000`
+## Usage
 
-## Testing
-
-Run the test suite:
-```bash
-# Run all tests
-npm test
-
-# Run frontend tests
-cd frontend && npm test
-
-# Run backend tests
-cd backend && npm test
-```
-
-## Building for Production
-
-1. Build the frontend:
-```bash
-cd frontend
-npm run build
-```
-
-2. Build the backend:
-```bash
-cd backend
-npm run build
-```
-
-## Deployment
-
-### Using Docker (Recommended)
-
-1. Build and start the containers:
-```bash
-docker-compose up -d
-```
-
-2. Access the application at `http://localhost:3000`
-
-### Manual Deployment
-
-1. Set up a production server with Node.js 18 or later
-2. Clone the repository
-3. Install dependencies
-4. Set up environment variables
-5. Build the application
-6. Start the server:
-```bash
-cd backend
-npm start
-```
-
-## CI/CD Pipeline
-
-The project includes a GitHub Actions workflow that:
-1. Runs tests on every push and pull request
-2. Builds and pushes Docker images on main branch
-3. Deploys to production automatically
-
-### Required Secrets
-
-Set up the following secrets in your GitHub repository:
-- `DOCKERHUB_USERNAME`: Your Docker Hub username
-- `DOCKERHUB_TOKEN`: Your Docker Hub access token
-- `PROD_HOST`: Production server hostname
-- `PROD_USERNAME`: Production server username
-- `PROD_SSH_KEY`: SSH private key for production server access
-
-## Security Considerations
-
-1. Always use HTTPS in production
-2. Keep certificates and private keys secure
-3. Regularly update dependencies
-4. Monitor certificate expiration
-5. Implement rate limiting
-6. Use secure headers
-7. Validate all user inputs
-
-## Monitoring and Maintenance
-
-1. Monitor application logs:
-```bash
-docker-compose logs -f
-```
-
-2. Check certificate status:
-```bash
-curl http://localhost:3000/api/certificates/status
-```
-
-3. Monitor font cache:
-```bash
-curl http://localhost:3000/api/fonts/stats
-```
-
-## Troubleshooting
-
-1. Check logs for errors:
-```bash
-docker-compose logs
-```
-
-2. Verify environment variables:
-```bash
-docker-compose config
-```
-
-3. Restart services:
-```bash
-docker-compose restart
-```
+1. Access the application at `http://localhost:5173`
+2. Create new bills using the "New Bill" button
+3. View and manage bills in the bill list
+4. Preview or download bills as PDFs
 
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
