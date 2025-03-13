@@ -55,6 +55,15 @@ export async function initializeDatabase() {
       database = 'postgres';
     }
     
+    // EMERGENCY FIX: Always use direct IP address for Supabase pooler
+    // Check if the host is Supabase and replace with IP
+    if (host && (host.includes('pooler.supabase.com') || host.includes('supabase.co'))) {
+      console.log(`Replacing database host ${host} with direct IPv4 address`);
+      // This is the IPv4 address for aws-0-ap-south-1.pooler.supabase.com
+      host = '3.111.105.85';
+      console.log(`Now using direct IPv4 address: ${host}`);
+    }
+    
     // Configure connection without using the connection string
     const config = {
       user,

@@ -1,3 +1,15 @@
+// Apply IPv4 fixes directly in the main application file
+try {
+  // Try to force IPv4 at the application level
+  const dnsModule = await import('dns');
+  if (typeof dnsModule.setDefaultResultOrder === 'function') {
+    dnsModule.setDefaultResultOrder('ipv4first');
+    console.log('Forced IPv4 DNS resolution in index.js');
+  }
+} catch (err) {
+  console.error('Failed to force IPv4 in index.js:', err);
+}
+
 import app from './app.js'
 import { initializeDatabase } from './utils/database.js'
 import dotenv from 'dotenv'
