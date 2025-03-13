@@ -1,1 +1,1 @@
-web: node --dns-result-order=ipv4first src/index.js
+web: node --require ./src/preload/pg-fix.js --dns-result-order=ipv4first src/index.js

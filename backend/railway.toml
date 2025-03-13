@@ -4,7 +4,7 @@ dockerfilePath = "Dockerfile"
 dockerfileDirectory = "."
 
 [deploy]
-startCommand = "node --dns-result-order=ipv4first src/index.js"
+startCommand = "node --require ./src/preload/pg-fix.js --dns-result-order=ipv4first src/index.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 healthcheckPath = "/api/health"
