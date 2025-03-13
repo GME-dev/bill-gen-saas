@@ -64,4 +64,8 @@ export const BRANDING_CONFIG = {
             wordSpacing: 0
         }
     }
-}; 
+};
+
+export const CORS_ORIGIN = process.env.NODE_ENV === 'production' 
+  ? 'https://your-app-name.pages.dev'  // Replace with your Cloudflare Pages domain
+  : 'http://localhost:5173'; 
