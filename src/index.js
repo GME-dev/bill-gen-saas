@@ -5,6 +5,17 @@ import billsRouter from './routes/bills.js'
 import bikeModelsRouter from './routes/bike-models.js'
 import healthRouter from './routes/health.js'
 
+// CRITICAL FIX: Force IPv4 for Supabase connection
+if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('pooler.supabase.com')) {
+  console.log('Detected Supabase connection, converting to direct IPv4 address')
+  const ipv4Address = '3.111.105.85' // IPv4 address for aws-0-ap-south-1.pooler.supabase.com
+  process.env.DATABASE_URL = process.env.DATABASE_URL.replace(
+    /(?:postgres|postgresql):\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/,
+    `postgresql://$1:$2@${ipv4Address}:$4/$5`
+  )
+  console.log('Database URL converted to use direct IPv4 address. Hostname replaced with IP.')
+}
+
 const app = express()
 const port = process.env.PORT || 3000
 

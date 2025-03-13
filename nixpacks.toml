@@ -8,4 +8,7 @@ cmds = ["npm install"]
 cmds = []
 
 [start]
-cmd = "node src/index.js" 
+cmd = "node --dns-result-order=ipv4first src/index.js"
+
+[variables]
+NODE_OPTIONS = "--dns-result-order=ipv4first"

@@ -43,7 +43,10 @@ RUN mkdir -p assets/certificates assets/fonts data uploads
 ENV PORT=3000
 ENV NODE_ENV=production
 ENV CORS_ORIGIN=https://tmr-bill-generator.pages.dev
-ENV DATABASE_URL=postgres://postgres:p*BQQ44ue-PfE2R@db.onmonxsgkdaurztdhafz.supabase.co:5432/postgres
+# Force IPv4 in Node.js
+ENV NODE_OPTIONS="--dns-result-order=ipv4first"
+# Use direct IPv4 connection
+ENV DATABASE_URL=postgres://postgres:p*BQQ44ue-PfE2R@3.111.105.85:5432/postgres
 ENV SUPABASE_SSL_ENABLED=true
 ENV TEMPLATES_DIR=./templates
 ENV FRONTEND_URL=https://tmr-bill-generator.pages.dev
