@@ -1,6 +1,5 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "npm install"
+builder = "nixpacks"
 
 [deploy]
 startCommand = "npm start"
