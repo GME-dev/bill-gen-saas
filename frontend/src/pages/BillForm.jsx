@@ -36,12 +36,14 @@ export default function BillForm() {
 
   // Calculate total amount whenever bike price or bill type changes
   useEffect(() => {
-    const total = formData.bike_price + 13000 // Add RMV charge
+    const bikePrice = parseInt(formData.bike_price) || 0;
+    const rmvCharge = 13000;
+    const total = bikePrice + rmvCharge;
     setFormData(prev => ({
       ...prev,
       total_amount: total
-    }))
-  }, [formData.bike_price, formData.bill_type])
+    }));
+  }, [formData.bike_price, formData.bill_type]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -49,7 +51,7 @@ export default function BillForm() {
 
     // Handle numeric fields
     if (name === 'bike_price' || name === 'down_payment') {
-      updatedValue = parseFloat(value) || 0
+      updatedValue = parseInt(value) || 0
     }
 
     setFormData(prev => ({
@@ -64,7 +66,7 @@ export default function BillForm() {
         setFormData(prev => ({
           ...prev,
           model_name: selectedModel.model_name,
-          bike_price: selectedModel.price,
+          bike_price: parseInt(selectedModel.price),
           motor_number: selectedModel.motor_number_prefix ? `${selectedModel.motor_number_prefix}-` : '',
           chassis_number: selectedModel.chassis_number_prefix ? `${selectedModel.chassis_number_prefix}-` : ''
         }))
@@ -102,9 +104,17 @@ export default function BillForm() {
         return
       }
 
+      // Calculate total amount
+      const bikePrice = parseInt(formData.bike_price) || 0;
+      const downPayment = parseInt(formData.down_payment) || 0;
+      const rmvCharge = 13000;
+      const totalAmount = formData.bill_type === 'leasing' ? downPayment : bikePrice + rmvCharge;
+
       const response = await axios.post('http://localhost:3000/api/bills', {
         ...formData,
-        total_amount: formData.bike_price + 13000 // Add RMV charge
+        bike_price: bikePrice,
+        down_payment: downPayment,
+        total_amount: totalAmount
       })
       
       if (response.data && response.data.id) {
@@ -120,6 +130,53 @@ export default function BillForm() {
       setLoading(false)
     }
   }
+
+  const handlePreviewPDF = async () => {
+    try {
+      // Validate form data
+      if (!formData.customer_name || !formData.customer_nic || !formData.customer_address) {
+        toast.error('Please fill in all customer information');
+        return;
+      }
+
+      if (!formData.model_name || !formData.motor_number || !formData.chassis_number || !formData.bike_price) {
+        toast.error('Please fill in all vehicle information');
+        return;
+      }
+
+      // Calculate total amount for preview
+      const bikePrice = parseInt(formData.bike_price) || 0;
+      const downPayment = parseInt(formData.down_payment) || 0;
+      const rmvCharge = 13000;
+      const totalAmount = formData.bill_type === 'leasing' ? downPayment : bikePrice + rmvCharge;
+
+      const previewData = {
+        ...formData,
+        bike_price: bikePrice,
+        down_payment: downPayment,
+        total_amount: totalAmount
+      };
+
+      const response = await axios.get(
+        `http://localhost:3000/api/bills/preview/pdf`,
+        {
+          params: {
+            preview: true,
+            formData: JSON.stringify(previewData)
+          },
+          responseType: 'blob'
+        }
+      );
+      
+      // Create blob URL and open in new window
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Error previewing PDF:', error);
+      toast.error('Failed to preview PDF');
+    }
+  };
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -215,7 +272,7 @@ export default function BillForm() {
                 <option value="">Select Model</option>
                 {bikeModels.map(model => (
                   <option key={model.id} value={model.model_name}>
-                    {model.model_name} - Rs. {model.price.toLocaleString()}
+                    {model.model_name}
                   </option>
                 ))}
               </select>
@@ -257,7 +314,7 @@ export default function BillForm() {
               <input
                 type="number"
                 name="bike_price"
-                value={formData.bike_price}
+                value={parseInt(formData.bike_price)}
                 readOnly
                 className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm"
               />
@@ -269,7 +326,7 @@ export default function BillForm() {
                 <input
                   type="number"
                   name="down_payment"
-                  value={formData.down_payment}
+                  value={parseInt(formData.down_payment)}
                   onChange={handleInputChange}
                   required
                   min="0"
@@ -283,17 +340,24 @@ export default function BillForm() {
           <div className="mt-4 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">RMV Charge:</span>
-              <span className="font-medium">Rs. 13,000.00</span>
+              <span className="font-medium">Rs. 13,000/=</span>
             </div>
             <div className="flex justify-between pt-2 border-t">
               <span className="text-gray-900 font-medium">Total Amount:</span>
-              <span className="text-lg font-bold">Rs. {formData.total_amount.toLocaleString()}</span>
+              <span className="text-lg font-bold">Rs. {parseInt(formData.total_amount).toLocaleString()}/=</span>
             </div>
           </div>
         </div>
 
         {/* Form Actions */}
         <div className="flex justify-end space-x-4">
+          <button
+            type="button"
+            onClick={handlePreviewPDF}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Preview PDF
+          </button>
           <button
             type="button"
             onClick={() => navigate('/bills')}

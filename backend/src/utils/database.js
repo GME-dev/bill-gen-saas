@@ -1,96 +1,74 @@
-import sqlite3 from 'sqlite3'
-import { open } from 'sqlite'
-import { fileURLToPath } from 'url'
-import { dirname, join } from 'path'
-import fs from 'fs'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const projectRoot = join(__dirname, '../..')
+import pg from 'pg'
+const { Pool } = pg
 
 let db = null
 
 export async function initializeDatabase() {
   if (db) {
-    try {
-      // Test the connection
-      await db.get('SELECT 1')
-      return db
-    } catch (error) {
-      console.log('Database connection lost, reconnecting...')
-      db = null
-    }
+    console.log('Database already initialized')
+    return db
   }
 
   try {
-    // Create data directory if it doesn't exist
-    const dataDir = join(projectRoot, 'data')
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true })
-    }
-
-    const dbPath = join(dataDir, 'bills.db')
-    console.log('Database path:', dbPath)
-
-    // Ensure the database file exists
-    if (!fs.existsSync(dbPath)) {
-      fs.writeFileSync(dbPath, '')
-    }
-
-    db = await open({
-      filename: dbPath,
-      driver: sqlite3.Database
+    db = new Pool({
+      connectionString: 'postgresql://postgres:p*BQQ44ue-PfE2R@db.onmonxsgkdaurztdhafz.supabase.co:5432/postgres',
+      ssl: {
+        rejectUnauthorized: false
+      }
     })
 
-    // Enable foreign keys
-    await db.run('PRAGMA foreign_keys = ON')
-    await db.run('PRAGMA journal_mode = WAL')
+    // Test the connection
+    await db.query('SELECT NOW()')
+    console.log('Database connected successfully')
 
-    // Create tables
-    await db.exec(`
+    // Create tables if they don't exist
+    await db.query(`
       CREATE TABLE IF NOT EXISTS bills (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        bill_type TEXT NOT NULL,
-        customer_name TEXT NOT NULL,
-        customer_nic TEXT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        bill_type VARCHAR(10) NOT NULL,
+        customer_name VARCHAR(100) NOT NULL,
+        customer_nic VARCHAR(20) NOT NULL,
         customer_address TEXT NOT NULL,
-        model_name TEXT NOT NULL,
-        motor_number TEXT NOT NULL,
-        chassis_number TEXT NOT NULL,
-        bike_price REAL NOT NULL,
-        down_payment REAL DEFAULT 0,
-        total_amount REAL NOT NULL,
-        bill_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        status TEXT DEFAULT 'pending'
-      );
-
-      CREATE TABLE IF NOT EXISTS bike_models (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        model_name TEXT NOT NULL UNIQUE,
-        price REAL NOT NULL,
-        motor_number_prefix TEXT,
-        chassis_number_prefix TEXT
-      );
-
-      -- Insert predefined bike models
-      INSERT OR IGNORE INTO bike_models (model_name, price) VALUES
-        ('TMR-G18', 499500),
-        ('TMR-MNK3', 475000),
-        ('TMR-Q1', 449500),
-        ('TMR-ZL', 399500),
-        ('TMR-ZS', 349500),
-        ('TMR-XGW', 299500),
-        ('TMR-COLA5', 249500),
-        ('TMR-X01', 219500);
-
-      -- Remove unused tables
-      DROP TABLE IF EXISTS bill_items;
-      DROP TABLE IF EXISTS products;
+        model_name VARCHAR(100) NOT NULL,
+        motor_number VARCHAR(50) NOT NULL,
+        chassis_number VARCHAR(50) NOT NULL,
+        bike_price DECIMAL(10,2) NOT NULL,
+        down_payment DECIMAL(10,2),
+        total_amount DECIMAL(10,2) NOT NULL,
+        bill_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `)
 
-    // Test the connection
-    await db.get('SELECT 1')
-    console.log('Database initialized successfully')
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS bike_models (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        price DECIMAL(10,2) NOT NULL
+      )
+    `)
+
+    // Insert predefined bike models if they don't exist
+    const predefinedModels = [
+      ['TMR-G18', 499500],
+      ['TMR-MNK3', 475000],
+      ['TMR-Q1', 449500],
+      ['TMR-ZL', 399500],
+      ['TMR-ZS', 349500],
+      ['TMR-XGW', 299500],
+      ['TMR-COLA5', 249500],
+      ['TMR-X01', 219500]
+    ]
+
+    for (const [name, price] of predefinedModels) {
+      await db.query(`
+        INSERT INTO bike_models (name, price)
+        VALUES ($1, $2)
+        ON CONFLICT (name) DO UPDATE SET price = $2`,
+        [name, price]
+      )
+    }
+
+    console.log('Database tables and predefined data initialized successfully')
     return db
   } catch (error) {
     console.error('Database initialization error:', error)
@@ -103,4 +81,4 @@ export function getDatabase() {
     throw new Error('Database not initialized. Please ensure initializeDatabase() is called first.')
   }
   return db
-} 
+}

@@ -203,7 +203,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['Bike Price', bill.bike_price.toLocaleString()],
+                ['Bike Price', `${parseInt(bill.bike_price).toLocaleString()}/=`],
                 font
             )
 
@@ -212,7 +212,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['RMV Charge', bill.bill_type === 'cash' ? '13,000' : 'CPZ'],
+                ['RMV Charge', bill.bill_type === 'cash' ? '13,000/=' : 'CPZ'],
                 font
             )
 
@@ -221,10 +221,15 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Down Payment', bill.down_payment.toLocaleString()],
+                    ['Down Payment', `${parseInt(bill.down_payment).toLocaleString()}/=`],
                     font
                 )
             }
+
+            // Calculate total amount
+            const totalAmount = bill.bill_type === 'leasing' 
+                ? parseInt(bill.down_payment)
+                : parseInt(bill.bike_price) + 13000;
 
             // Total row with (D/P) for leasing
             this.drawTableRow(
@@ -232,8 +237,8 @@ export class PDFGenerator {
                 this.margin,
                 tableY,
                 ['Total Amount', bill.bill_type === 'leasing' ? 
-                    `${bill.down_payment.toLocaleString()} (D/P)` : 
-                    (bill.bike_price + 13000).toLocaleString()],
+                    `${parseInt(bill.down_payment).toLocaleString()}/= (D/P)` : 
+                    `${totalAmount.toLocaleString()}/=`],
                 boldFont,
                 12,
                 true

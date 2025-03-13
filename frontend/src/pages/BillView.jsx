@@ -25,27 +25,45 @@ export default function BillView() {
     }
   }
 
+  const handlePreviewPDF = async () => {
+    try {
+      const response = await axios.get(
+        `http://localhost:3000/api/bills/${id}/pdf?preview=true`,
+        { responseType: 'blob' }
+      );
+      
+      // Create blob URL and open in new window
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      console.error('Error previewing PDF:', error);
+      toast.error('Failed to preview PDF');
+    }
+  };
+
   const handleDownloadPDF = async () => {
     try {
-      const response = await axios.get(`http://localhost:3000/api/bills/${id}/pdf`, {
-        responseType: 'blob'
-      })
+      const response = await axios.get(
+        `http://localhost:3000/api/bills/${id}/pdf`,
+        { responseType: 'blob' }
+      );
       
-      const blob = new Blob([response.data], { type: 'application/pdf' })
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `bill-${id}.pdf`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
+      // Create download link
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bill-${id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
-      toast.error('Failed to download PDF')
-      console.error('Error downloading PDF:', error)
-      alert('Failed to download PDF. Please try again.')
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF');
     }
-  }
+  };
 
   const handleStatusChange = async (newStatus) => {
     try {
@@ -115,6 +133,12 @@ export default function BillView() {
       <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Bill Details</h1>
         <div className="space-x-4">
+          <button
+            onClick={handlePreviewPDF}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Preview PDF
+          </button>
           <button
             onClick={handleDownloadPDF}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
