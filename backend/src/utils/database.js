@@ -28,12 +28,22 @@ export async function initializeDatabase() {
   }
 
   try {
+    // Parse the connection string to force IPv4
+    let connectionString = process.env.DATABASE_URL;
+    
+    // Extract host from connection string if it contains one
+    const hostMatch = connectionString.match(/postgres:\/\/[^:]+:[^@]+@([^:]+):/);
+    const host = hostMatch ? hostMatch[1] : null;
+    
     const config = {
       connectionString: process.env.DATABASE_URL,
       ssl: {
         rejectUnauthorized: false,
         sslmode: 'require'
       },
+      // Force IPv4 by setting these options
+      host: host || 'db.onmonxsgkdaurztdhafz.supabase.co', // Extracted from connection string
+      family: 4, // Force IPv4
       max: 20, // Maximum number of clients in the pool
       idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
       connectionTimeoutMillis: 10000 // Extended timeout for connection
