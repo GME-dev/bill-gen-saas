@@ -66,6 +66,8 @@ export async function initializeDatabase() {
         rejectUnauthorized: false,
         sslmode: 'require'
       },
+      // Force IPv4 connections
+      family: 4,
       // We're not using connectionString anymore, so these options will take effect
       max: 20, // Maximum number of clients in the pool
       idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
