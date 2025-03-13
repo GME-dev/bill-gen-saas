@@ -17,6 +17,9 @@ COPY assets ./assets
 ENV PORT=3000
 ENV NODE_ENV=production
 
+# Create necessary directories
+RUN mkdir -p assets/certificates assets/fonts
+
 EXPOSE 3000
 
 # Start command
