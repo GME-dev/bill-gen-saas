@@ -1,8 +1,15 @@
 import pg from 'pg'
 import dotenv from 'dotenv'
+import { lookup } from 'dns'
+
+// Force Node.js to prefer IPv4 addresses
+lookup('pooler.supabase.com', { family: 4 }, () => {});
 
 // Load environment variables
 dotenv.config()
+
+// Set environment variable to force IPv4
+process.env.NODE_OPTIONS = '--dns-result-order=ipv4first'
 
 const { Pool } = pg
 let db = null
@@ -51,17 +58,39 @@ export async function initializeDatabase() {
     }
     
     // Configure connection
-    const config = {
-      connectionString: process.env.DATABASE_URL,
-      ssl: {
-        rejectUnauthorized: false,
-        sslmode: 'require'
-      },
-      family: 4, // Force IPv4 connections
-      max: 20, // Maximum number of clients in the pool
-      idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-      connectionTimeoutMillis: 10000, // Extended timeout for connection
-      keepAlive: true // Keep the connection alive
+    let config;
+    if (userPassHostMatch) {
+      // Use individual parameters to ensure IPv4 is used
+      config = {
+        user,
+        password,
+        host,
+        port,
+        database,
+        ssl: {
+          rejectUnauthorized: false,
+          sslmode: 'require'
+        },
+        family: 4, // Force IPv4 connections
+        max: 20, // Maximum number of clients in the pool
+        idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
+        connectionTimeoutMillis: 10000, // Extended timeout for connection
+        keepAlive: true // Keep the connection alive
+      }
+    } else {
+      // Fallback to connection string if parsing failed
+      config = {
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+          rejectUnauthorized: false,
+          sslmode: 'require'
+        },
+        family: 4, // Force IPv4 connections
+        max: 20, // Maximum number of clients in the pool
+        idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
+        connectionTimeoutMillis: 10000, // Extended timeout for connection
+        keepAlive: true // Keep the connection alive
+      }
     }
 
     db = new Pool(config)
