@@ -1,9 +1,9 @@
 [build]
 builder = "nixpacks"
-nixpacksConfigPath = "backend/nixpacks.toml"
+nixpacksConfigPath = "nixpacks.toml"
 
 [deploy]
-startCommand = "cd backend && node src/index.js"
+startCommand = "node src/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
