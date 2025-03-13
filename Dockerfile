@@ -3,19 +3,19 @@ FROM node:18-alpine
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy backend package files
+COPY backend/package*.json ./
 
 # Install dependencies
 RUN npm install --production
 
-# Copy the application files
-COPY src ./src
-COPY assets ./assets
-COPY templates ./templates
-COPY tsconfig.json ./
-COPY wrangler.toml ./
-COPY .env ./
+# Copy the backend application files
+COPY backend/src ./src
+COPY backend/assets ./assets
+COPY backend/templates ./templates
+COPY backend/tsconfig.json ./
+COPY backend/wrangler.toml ./
+COPY backend/.env ./
 
 # Create necessary directories
 RUN mkdir -p assets/certificates assets/fonts data uploads
