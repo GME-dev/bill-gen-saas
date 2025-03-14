@@ -45,6 +45,8 @@ RUN mkdir -p assets/certificates assets/fonts data uploads
 ENV PORT=8080
 ENV NODE_ENV=production
 ENV CORS_ORIGIN=https://tmr-bill-generator.pages.dev
+# Disable SSL verification for Supabase connection
+ENV NODE_TLS_REJECT_UNAUTHORIZED=0
 # DATABASE_URL will be provided by Railway environment variables
 ENV TEMPLATES_DIR=./templates
 ENV FRONTEND_URL=https://tmr-bill-generator.pages.dev
