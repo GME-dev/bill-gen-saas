@@ -14,7 +14,7 @@ const BillList = () => {
 
   const fetchBills = async () => {
     try {
-      const response = await api.get('/api/bills')
+      const response = await api.get('/bills')
       setBills(response.data)
     } catch (error) {
       console.error('Error fetching bills:', error)
@@ -27,7 +27,7 @@ const BillList = () => {
   const handleDownloadPDF = async (billId, preview = false) => {
     try {
       const response = await api.get(
-        `/api/bills/${billId}/pdf${preview ? '?preview=true' : ''}`,
+        `/bills/${billId}/pdf${preview ? '?preview=true' : ''}`,
         { responseType: 'blob' }
       )
       
@@ -59,7 +59,7 @@ const BillList = () => {
     }
 
     try {
-      await api.delete(`/api/bills/${billId}`)
+      await api.delete(`/bills/${billId}`)
       toast.success('Bill deleted successfully')
       fetchBills()
     } catch (error) {

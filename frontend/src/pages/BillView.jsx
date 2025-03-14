@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
+import api from '../config/api'
 
 export default function BillView() {
   const { id } = useParams()
@@ -15,20 +16,21 @@ export default function BillView() {
 
   const fetchBill = async () => {
     try {
-      const response = await axios.get(`http://localhost:3000/api/bills/${id}`)
+      setLoading(true)
+      const response = await api.get(`/bills/${id}`)
       setBill(response.data)
-      setLoading(false)
     } catch (error) {
       toast.error('Failed to fetch bill')
       console.error('Error fetching bill:', error)
+    } finally {
       setLoading(false)
     }
   }
 
   const handlePreviewPDF = async () => {
     try {
-      const response = await axios.get(
-        `http://localhost:3000/api/bills/${id}/pdf?preview=true`,
+      const response = await api.get(
+        `/bills/${id}/pdf?preview=true`,
         { responseType: 'blob' }
       );
       
@@ -44,8 +46,9 @@ export default function BillView() {
 
   const handleDownloadPDF = async () => {
     try {
-      const response = await axios.get(
-        `http://localhost:3000/api/bills/${id}/pdf`,
+      setDownloading(true)
+      const response = await api.get(
+        `/bills/${id}/pdf`,
         { responseType: 'blob' }
       );
       
@@ -67,8 +70,9 @@ export default function BillView() {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await axios.patch(`http://localhost:3000/api/bills/${id}`, { status: newStatus })
+      await api.patch(`/bills/${id}`, { status: newStatus })
       fetchBill()
+      toast.success(`Bill status updated to ${newStatus}`)
     } catch (error) {
       console.error('Error updating status:', error)
       alert('Failed to update status. Please try again.')
@@ -76,10 +80,11 @@ export default function BillView() {
   }
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this bill?')) {
+    if (window.confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
       try {
-        await axios.delete(`http://localhost:3000/api/bills/${id}`)
+        await api.delete(`/bills/${id}`)
         navigate('/bills')
+        toast.success('Bill deleted successfully')
       } catch (error) {
         console.error('Error deleting bill:', error)
         alert('Failed to delete bill. Please try again.')
