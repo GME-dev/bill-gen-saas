@@ -33,30 +33,28 @@ COPY --from=build /build/node_modules /app/node_modules
 COPY src ./src
 COPY assets ./assets
 COPY templates ./templates
-COPY tsconfig.json ./tsconfig.json
-COPY wrangler.toml ./wrangler.toml
+
+# Add any optional files if they exist
+COPY tsconfig.json* ./
+COPY wrangler.toml* ./
 
 # Create necessary directories
 RUN mkdir -p assets/certificates assets/fonts data uploads
 
-# Environment variables (these will be overridden by Railway environment variables)
-ENV PORT=3000
+# Environment variables
+ENV PORT=8080
 ENV NODE_ENV=production
 ENV CORS_ORIGIN=https://tmr-bill-generator.pages.dev
-# Force IPv4 in Node.js
-ENV NODE_OPTIONS="--dns-result-order=ipv4first"
-# Use direct IPv4 connection
-ENV DATABASE_URL=postgres://postgres:p*BQQ44ue-PfE2R@3.111.105.85:5432/postgres
-ENV SUPABASE_SSL_ENABLED=true
+# DATABASE_URL will be provided by Railway environment variables
 ENV TEMPLATES_DIR=./templates
 ENV FRONTEND_URL=https://tmr-bill-generator.pages.dev
 ENV JWT_SECRET=your-production-secret
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
 
-EXPOSE 3000
+EXPOSE 8080
 
 # Start command with proper signal handling
-CMD ["node", "src/index.js"]
+CMD ["node", "--require", "./src/preload/db-fix.cjs", "--dns-result-order=ipv4first", "src/index.js"]
