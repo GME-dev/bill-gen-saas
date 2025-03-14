@@ -18,14 +18,25 @@ export async function initializeDatabase() {
   connectionAttempts++
   console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
   
+  // Log database connection string (masked for security)
+  const connString = process.env.DATABASE_URL || ''
+  if (connString) {
+    const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
+    console.log(`Using database connection: ${maskedString}`)
+  } else {
+    console.error('DATABASE_URL environment variable is not set!')
+    return null
+  }
+
   try {
-    // Use the connection string directly from DATABASE_URL
+    // Use connection string directly with SSL config
     const config = {
       connectionString: process.env.DATABASE_URL,
       ssl: {
         rejectUnauthorized: false,
         sslmode: 'require'
       },
+      // Connection pool settings
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,

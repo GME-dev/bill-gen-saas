@@ -7,23 +7,35 @@
 
 'use strict';
 
-// Force IPv4 DNS resolution
+// Force IPv4 for PostgreSQL connections
 const dns = require('dns');
-if (typeof dns.setDefaultResultOrder === 'function') {
-  dns.setDefaultResultOrder('ipv4first');
-}
+const { isIP } = require('net');
 
-// Monkey patch Socket to force IPv4
-const net = require('net');
-const originalConnect = net.Socket.prototype.connect;
+// Store the original lookup function
+const originalLookup = dns.lookup;
 
-net.Socket.prototype.connect = function() {
-  // Force IPv4 family when connecting to PostgreSQL
-  if (arguments[0] && typeof arguments[0] === 'object' && arguments[0].port === 5432) {
-    console.log('FORCING IPV4 FOR POSTGRESQL CONNECTION');
-    arguments[0].family = 4;
+// Override the lookup function to prioritize IPv4
+dns.lookup = (hostname, options, callback) => {
+  if (typeof options === 'function') {
+    callback = options;
+    options = undefined;
   }
-  return originalConnect.apply(this, arguments);
+  options = options || {};
+  
+  // Force IPv4
+  options.family = 4;
+  
+  // If it's already an IP, just return it
+  if (isIP(hostname)) {
+    const ip = hostname;
+    const family = isIP(ip);
+    process.nextTick(() => {
+      callback(null, ip, family);
+    });
+    return;
+  }
+
+  return originalLookup(hostname, options, callback);
 };
 
 console.log('PG IPv4 fix applied (CommonJS version)');
