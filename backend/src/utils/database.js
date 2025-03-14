@@ -18,70 +18,18 @@ export async function initializeDatabase() {
   connectionAttempts++
   console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
   
-  // Log database connection string (masked for security)
-  const connString = process.env.DATABASE_URL || ''
-  if (connString) {
-    const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
-    console.log(`Using database connection: ${maskedString}`)
-  } else {
-    console.error('DATABASE_URL environment variable is not set!')
-  }
-
   try {
-    // Don't use the connection string directly - extract and use individual parameters
-    // to ensure we use proper IPv4 connectivity
-    let connectionString = process.env.DATABASE_URL || '';
-    
-    // Extract connection details from the connection string
-    const userPassHostMatch = connectionString.match(/postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
-    
-    let user, password, host, port, database;
-    
-    if (userPassHostMatch) {
-      user = userPassHostMatch[1];
-      password = userPassHostMatch[2];
-      host = userPassHostMatch[3];
-      port = parseInt(userPassHostMatch[4], 10);
-      database = userPassHostMatch[5];
-      
-      // Log connection details (masking password)
-      console.log(`Extracted connection details: user=${user}, host=${host}, port=${port}, database=${database}`);
-    } else {
-      console.warn('Could not parse DATABASE_URL, using defaults');
-      user = 'postgres';
-      password = 'p*BQQ44ue-PfE2R';
-      host = 'db.onmonxsgkdaurztdhafz.supabase.co';
-      port = 5432;
-      database = 'postgres';
-    }
-    
-    // EMERGENCY FIX: Always use direct IP address for Supabase pooler
-    // Check if the host is Supabase and replace with IP
-    if (host && (host.includes('pooler.supabase.com') || host.includes('supabase.co'))) {
-      console.log(`Replacing database host ${host} with direct IPv4 address`);
-      // This is the IPv4 address for aws-0-ap-south-1.pooler.supabase.com
-      host = '3.111.105.85';
-      console.log(`Now using direct IPv4 address: ${host}`);
-    }
-    
-    // Configure connection without using the connection string
+    // Use the connection string directly from DATABASE_URL
     const config = {
-      user,
-      password,
-      host, 
-      port,
-      database,
+      connectionString: process.env.DATABASE_URL,
       ssl: {
         rejectUnauthorized: false,
         sslmode: 'require'
       },
-      // Force IPv4 connections
-      family: 4,
-      // We're not using connectionString anymore, so these options will take effect
-      max: 20, // Maximum number of clients in the pool
-      idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-      connectionTimeoutMillis: 10000, // Extended timeout for connection
-      keepAlive: true // Keep the connection alive
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      keepAlive: true
     }
 
     db = new Pool(config)
@@ -89,7 +37,6 @@ export async function initializeDatabase() {
     // Add error handler for the pool
     db.on('error', (err) => {
       console.error('Unexpected database pool error:', err)
-      // If we lose connection, null out db so we can try to reconnect
       if (err.message.includes('connection terminated') || err.message.includes('connection refused')) {
         console.log('Database connection lost, will reconnect on next request')
         db = null
@@ -161,12 +108,10 @@ export async function initializeDatabase() {
   } catch (error) {
     console.error('Error initializing database:', error)
     
-    // If we've tried too many times, rethrow the error
     if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
       console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`)
       throw new Error('Failed to initialize database: ' + error.message)
     } else {
-      // Return null but don't throw, so health check can still pass
       console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
       return null
     }
