@@ -10,6 +10,13 @@ let connectionAttempts = 0
 const MAX_CONNECTION_ATTEMPTS = 5
 
 export async function initializeDatabase() {
+  // Check if we should use mock DB
+  if (process.env.USE_MOCK_DB === 'true') {
+    console.log('Using mock database as USE_MOCK_DB is set to true')
+    usingMockDb = true
+    return mockPool
+  }
+
   if (db) {
     console.log('Database already initialized')
     return db
@@ -20,28 +27,33 @@ export async function initializeDatabase() {
   
   // Log database connection string (masked for security)
   const connString = process.env.DATABASE_URL || ''
-  if (connString) {
-    const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
-    console.log(`Using database connection: ${maskedString}`)
-  } else {
+  if (!connString) {
     console.error('DATABASE_URL environment variable is not set!')
     return null
   }
+
+  const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
+  console.log(`Using database connection: ${maskedString}`)
 
   try {
     // Use connection string directly with SSL config
     const config = {
       connectionString: process.env.DATABASE_URL,
-      ssl: {
+      ssl: process.env.SUPABASE_SSL_ENABLED === 'true' ? {
         rejectUnauthorized: false,
         sslmode: 'require'
-      },
+      } : false,
       // Connection pool settings
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000,
       keepAlive: true
     }
+
+    console.log('Creating database pool with config:', {
+      ...config,
+      connectionString: maskedString
+    })
 
     db = new Pool(config)
 
@@ -117,7 +129,13 @@ export async function initializeDatabase() {
 
     return db
   } catch (error) {
-    console.error('Error initializing database:', error)
+    console.error('Error initializing database:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      hint: error.hint,
+      where: error.where
+    })
     
     if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
       console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`)
