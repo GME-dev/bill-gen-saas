@@ -57,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 EXPOSE 8080
 
 # Start command with proper signal handling
-CMD ["node", "--dns-result-order=ipv4first", "src/index.js"] 
+CMD ["node", "--require", "./src/preload/db-fix.cjs", "--dns-result-order=ipv4first", "src/index.js"] 
