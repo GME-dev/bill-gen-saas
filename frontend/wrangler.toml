@@ -1,0 +1,10 @@
+# Cloudflare Pages Configuration
+name = "bill-gen-saas"
+compatibility_date = "2023-12-01"
+
+[site]
+bucket = "./dist"
+pages_build_output_dir = "dist"
+
+[build]
+command = "npm run build" 
