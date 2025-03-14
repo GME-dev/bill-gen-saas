@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
 import toast from 'react-hot-toast'
+import api from '../config/api'
 
 const BillList = () => {
   const navigate = useNavigate()
@@ -14,7 +14,7 @@ const BillList = () => {
 
   const fetchBills = async () => {
     try {
-      const response = await axios.get('http://localhost:3000/api/bills')
+      const response = await api.get('/api/bills')
       setBills(response.data)
     } catch (error) {
       console.error('Error fetching bills:', error)
@@ -26,8 +26,8 @@ const BillList = () => {
 
   const handleDownloadPDF = async (billId, preview = false) => {
     try {
-      const response = await axios.get(
-        `http://localhost:3000/api/bills/${billId}/pdf${preview ? '?preview=true' : ''}`,
+      const response = await api.get(
+        `/api/bills/${billId}/pdf${preview ? '?preview=true' : ''}`,
         { responseType: 'blob' }
       )
       
@@ -59,7 +59,7 @@ const BillList = () => {
     }
 
     try {
-      await axios.delete(`http://localhost:3000/api/bills/${billId}`)
+      await api.delete(`/api/bills/${billId}`)
       toast.success('Bill deleted successfully')
       fetchBills()
     } catch (error) {
