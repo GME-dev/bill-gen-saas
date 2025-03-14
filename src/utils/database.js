@@ -17,6 +17,13 @@ let connectionAttempts = 0
 const MAX_CONNECTION_ATTEMPTS = 5
 
 export async function initializeDatabase() {
+  // Check if we should use mock DB
+  if (process.env.USE_MOCK_DB === 'true') {
+    console.log('Using mock database as USE_MOCK_DB is set to true')
+    usingMockDb = true
+    return mockPool
+  }
+
   if (db) {
     console.log('Database already initialized')
     return db
@@ -25,158 +32,57 @@ export async function initializeDatabase() {
   connectionAttempts++
   console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
   
-  // Log database connection string (masked for security)
-  const connString = process.env.DATABASE_URL || ''
-  if (connString) {
-    const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
-    console.log(`Using database connection: ${maskedString}`)
-  } else {
-    console.error('DATABASE_URL environment variable is not set!')
-  }
-
   try {
-    // Don't use the connection string directly - extract and use individual parameters
-    // to ensure we use proper IPv4 connectivity
-    let connectionString = process.env.DATABASE_URL || '';
-    
-    // Extract connection details from the connection string - supporting both postgres:// and postgresql://
-    const userPassHostMatch = connectionString.match(/(?:postgres|postgresql):\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
-    
-    let user, password, host, port, database;
-    
-    if (userPassHostMatch) {
-      user = userPassHostMatch[1];
-      password = userPassHostMatch[2];
-      host = userPassHostMatch[3];
-      port = parseInt(userPassHostMatch[4], 10);
-      database = userPassHostMatch[5];
-      
-      // Log connection details (masking password)
-      console.log(`Extracted connection details: user=${user}, host=${host}, port=${port}, database=${database}`);
-    } else {
-      console.warn('Could not parse DATABASE_URL, using defaults');
+    // Get the database connection string
+    const connectionString = process.env.DATABASE_URL
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is not set')
     }
     
-    // EMERGENCY FIX: Try multiple connection strategies
-    console.log('EMERGENCY FIX: Implementing multi-strategy database connection');
+    // Log masked connection string
+    const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
+    console.log(`Using database connection: ${maskedString}`)
     
-    // Strategy #1: Use IPv4 address for aws-0-ap-south-1.pooler.supabase.com
-    const ipv4PoolerString = 'postgresql://postgres:p*BQQ44ue-PfE2R@3.111.105.85:5432/postgres';
-    
-    // Strategy #2: Use alternate connection string from logs
-    const altConnectionString = 'postgresql://postgres:p*BQQ44ue-PfE2R@db.onmonxsgkdaurztdhafz.supabase.co:5432/postgres';
-    
-    // Strategy #3: Use current DATABASE_URL but try to fix IPv6 issues
-    const currentConnectionString = process.env.DATABASE_URL || '';
-    
-    console.log('Will try multiple connection strings in sequence until one works');
-    
-    // Use IPv4 connection first
-    let modifiedConnectionString = ipv4PoolerString;
-
-    let config = {
-      connectionString: modifiedConnectionString,
+    // Create connection pool with minimal configuration
+    const config = {
+      connectionString,
       ssl: {
-        rejectUnauthorized: false,
-        sslmode: 'require'
+        rejectUnauthorized: false
       },
-      max: 20, // Maximum number of clients in the pool
-      idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-      connectionTimeoutMillis: 10000, // Extended timeout for connection
-      keepAlive: true, // Keep the connection alive
-    };
-
-    // EMERGENCY FIX: Multi-strategy connection attempt
-    let connectionSuccess = false;
-    let connectionError = null;
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 30000 // Increased timeout
+    }
     
-    // Try strategy #1: IPv4 address for pooler
-    console.log('Trying Strategy #1: Direct IPv4 connection to pooler');
-    config.connectionString = ipv4PoolerString;
+    console.log('Creating database pool...')
+    db = new Pool(config)
+    
+    // Add error handler for the pool
+    db.on('error', (err) => {
+      console.error('Unexpected database pool error:', {
+        message: err.message,
+        code: err.code,
+        detail: err.detail
+      })
+      if (err.message.includes('connection terminated') || err.message.includes('connection refused')) {
+        console.log('Database connection lost, will reconnect on next request')
+        db = null
+        connectionAttempts = 0
+      }
+    })
+    
+    // Test the connection
+    console.log('Testing database connection...')
+    const client = await db.connect()
     
     try {
-      db = new Pool(config);
-      const client = await db.connect();
-      await client.query('SELECT NOW()');
-      console.log('✅ Strategy #1 SUCCESS: Connected using direct IPv4 address for pooler');
-      client.release();
-      connectionSuccess = true;
-    } catch (error) {
-      console.error('❌ Strategy #1 FAILED:', error.message);
-      connectionError = error;
-      // Try strategy #2
-      console.log('Trying Strategy #2: Alternate Supabase connection string');
-      config.connectionString = altConnectionString;
-      
-      try {
-        db = new Pool(config);
-        const client = await db.connect();
-        await client.query('SELECT NOW()');
-        console.log('✅ Strategy #2 SUCCESS: Connected using alternate connection string');
-        client.release();
-        connectionSuccess = true;
-      } catch (error2) {
-        console.error('❌ Strategy #2 FAILED:', error2.message);
-        // Try strategy #3
-        console.log('Trying Strategy #3: Original connection string with IPv4 family flag');
-        config.connectionString = currentConnectionString;
-        
-        try {
-          db = new Pool({
-            ...config,
-            family: 4
-          });
-          const client = await db.connect();
-          await client.query('SELECT NOW()');
-          console.log('✅ Strategy #3 SUCCESS: Connected using original string with IPv4 family flag');
-          client.release();
-          connectionSuccess = true;
-        } catch (error3) {
-          console.error('❌ Strategy #3 FAILED:', error3.message);
-          // All strategies failed, fall back to mock DB
-          console.error('All connection strategies failed, falling back to mock database');
-          usingMockDb = true;
-          connectionError = error3;
-        }
-      }
-    }
-    
-    // Handle connection result
-    if (connectionSuccess) {
-      console.log('Database connected successfully');
-      
-      // Add error handler for the pool
-      db.on('error', (err) => {
-        console.error('Unexpected database pool error:', err)
-        // If we lose connection, null out db so we can try to reconnect
-        if (err.message.includes('connection terminated') || err.message.includes('connection refused')) {
-          console.log('Database connection lost, will reconnect on next request')
-          db = null
-          connectionAttempts = 0
-        }
-      });
+      console.log('Running test query...')
+      const result = await client.query('SELECT NOW()')
+      console.log('Database connection successful:', result.rows[0])
       
       // Reset connection attempts on success
-      connectionAttempts = 0;
-    } else if (usingMockDb) {
-      console.log('Using mock database instead');
-      return mockPool;
-    } else {
-      // If we haven't retried too many times, we'll retry later
-      if (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
-        console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
-        return null;
-      } else {
-        throw connectionError || new Error('All connection strategies failed');
-      }
-    }
-    
-    // If we got here, we have a successful connection
-    try {
-      // Get a client to perform table creation
-      const client = await db.connect();
-      console.log('Connected to database, running test query...')
-
+      connectionAttempts = 0
+      
       // Create tables if they don't exist
       console.log('Creating tables if needed...')
       await client.query(`
@@ -195,7 +101,7 @@ export async function initializeDatabase() {
           bill_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
       `)
-
+      
       await client.query(`
         CREATE TABLE IF NOT EXISTS bike_models (
           id SERIAL PRIMARY KEY,
@@ -205,7 +111,7 @@ export async function initializeDatabase() {
           chassis_number_prefix VARCHAR(20)
         )
       `)
-
+      
       // Insert predefined bike models if they don't exist
       const existingModels = await client.query('SELECT COUNT(*) FROM bike_models')
       if (existingModels.rows[0].count === '0') {
@@ -226,17 +132,21 @@ export async function initializeDatabase() {
     } finally {
       client.release()
     }
-
+    
     return db
   } catch (error) {
-    console.error('Error initializing database:', error)
+    console.error('Error initializing database:', {
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      hint: error.hint,
+      where: error.where
+    })
     
-    // If we've tried too many times, rethrow the error
     if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
       console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`)
-      throw new Error('Failed to initialize database: ' + error.message)
+      throw error
     } else {
-      // Return null but don't throw, so health check can still pass
       console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
       return null
     }
