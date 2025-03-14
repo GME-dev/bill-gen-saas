@@ -24,42 +24,39 @@ export async function initializeDatabase() {
 
   connectionAttempts++
   console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
-  
-  // Log database connection string (masked for security)
-  const connString = process.env.DATABASE_URL || ''
-  if (!connString) {
-    console.error('DATABASE_URL environment variable is not set!')
-    return null
-  }
-
-  const maskedString = connString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
-  console.log(`Using database connection: ${maskedString}`)
 
   try {
-    // Use connection string directly with SSL config
-    const config = {
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.SUPABASE_SSL_ENABLED === 'true' ? {
-        rejectUnauthorized: false,
-        sslmode: 'require'
-      } : false,
-      // Connection pool settings
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
-      keepAlive: true
+    // Extract connection details from DATABASE_URL
+    const connectionString = process.env.DATABASE_URL
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is not set')
     }
 
-    console.log('Creating database pool with config:', {
-      ...config,
-      connectionString: maskedString
-    })
+    // Log masked connection string
+    const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
+    console.log(`Using database connection: ${maskedString}`)
 
+    // Create the connection pool with minimal configuration
+    const config = {
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false
+      },
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000
+    }
+
+    console.log('Creating database pool...')
     db = new Pool(config)
 
     // Add error handler for the pool
     db.on('error', (err) => {
-      console.error('Unexpected database pool error:', err)
+      console.error('Unexpected database pool error:', {
+        message: err.message,
+        code: err.code,
+        detail: err.detail
+      })
       if (err.message.includes('connection terminated') || err.message.includes('connection refused')) {
         console.log('Database connection lost, will reconnect on next request')
         db = null
@@ -68,11 +65,13 @@ export async function initializeDatabase() {
     })
 
     // Test the connection
+    console.log('Testing database connection...')
     const client = await db.connect()
+    
     try {
-      console.log('Connected to database, running test query...')
-      await client.query('SELECT NOW()')
-      console.log('Database connected successfully')
+      console.log('Running test query...')
+      const result = await client.query('SELECT NOW()')
+      console.log('Database connection successful:', result.rows[0])
       
       // Reset connection attempts on success
       connectionAttempts = 0
@@ -139,7 +138,7 @@ export async function initializeDatabase() {
     
     if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
       console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`)
-      throw new Error('Failed to initialize database: ' + error.message)
+      throw error
     } else {
       console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
       return null
