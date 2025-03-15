@@ -3,12 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 import api from '../config/api'
+import AdvancementConversion from '../components/AdvancementConversion'
 
 export default function BillView() {
   const { id } = useParams()
   const navigate = useNavigate()
   const [bill, setBill] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
+  const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
     fetchBill()
@@ -65,6 +68,31 @@ export default function BillView() {
     } catch (error) {
       console.error('Error downloading PDF:', error);
       toast.error('Failed to download PDF');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handlePrintBill = async () => {
+    try {
+      setPrinting(true);
+      const response = await api.get(
+        `/bills/${id}/pdf`,
+        { responseType: 'blob' }
+      );
+      
+      // Create blob URL and open print dialog
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const printWindow = window.open(url, '_blank');
+      printWindow.onload = function() {
+        printWindow.print();
+      };
+    } catch (error) {
+      console.error('Error printing bill:', error);
+      toast.error('Failed to print bill');
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -75,7 +103,7 @@ export default function BillView() {
       toast.success(`Bill status updated to ${newStatus}`)
     } catch (error) {
       console.error('Error updating status:', error)
-      alert('Failed to update status. Please try again.')
+      toast.error('Failed to update status');
     }
   }
 
@@ -87,9 +115,15 @@ export default function BillView() {
         toast.success('Bill deleted successfully')
       } catch (error) {
         console.error('Error deleting bill:', error)
-        alert('Failed to delete bill. Please try again.')
+        toast.error('Failed to delete bill');
       }
     }
+  }
+
+  // Handle bill conversion completion
+  const handleConversionComplete = () => {
+    toast.success('Bill converted successfully')
+    fetchBill() // Refresh bill data
   }
 
   const formatDate = (dateString) => {
@@ -137,110 +171,169 @@ export default function BillView() {
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Bill Details</h1>
-        <div className="space-x-4">
+        <div className="flex space-x-2">
           <button
-            onClick={handlePreviewPDF}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            onClick={() => navigate('/bills')}
+            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 flex items-center"
           >
-            Preview PDF
-          </button>
-          <button
-            onClick={handleDownloadPDF}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Download PDF
-          </button>
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-          >
-            Delete Bill
+            <span className="mr-1">←</span>
+            Back to List
           </button>
         </div>
       </div>
 
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="p-6 space-y-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-lg font-semibold">Bill #{bill.id}</h2>
-              <p className="text-sm text-gray-500">Created on {formatDate(bill.bill_date)}</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className={getStatusBadgeClass(bill.status)}>
-                {bill.status}
-              </span>
-              <select
-                value={bill.status}
-                onChange={(e) => handleStatusChange(e.target.value)}
-                className="text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-              >
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
+      {/* Bill Details Card */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Bill #{bill.id}</h2>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+            bill.status === 'completed' ? 'bg-green-100 text-green-800' :
+            bill.status === 'converted' ? 'bg-blue-100 text-blue-800' :
+            'bg-yellow-100 text-yellow-800'
+          }`}>
+            {bill.status === 'completed' ? 'Completed' :
+             bill.status === 'converted' ? 'Converted' :
+             'Pending'}
+          </span>
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Name</p>
-                <p className="mt-1">{bill.customer_name}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">NIC</p>
-                <p className="mt-1">{bill.customer_nic}</p>
-              </div>
-              <div className="md:col-span-2">
-                <p className="text-sm font-medium text-gray-500">Address</p>
-                <p className="mt-1">{bill.customer_address}</p>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Vehicle Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Model</p>
-                <p className="mt-1">{bill.model_name}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Motor Number</p>
-                <p className="mt-1">{bill.motor_number}</p>
-              </div>
-              <div className="md:col-span-2">
-                <p className="text-sm font-medium text-gray-500">Chassis Number</p>
-                <p className="mt-1">{bill.chassis_number}</p>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Payment Information</h3>
+            <h3 className="text-lg font-medium mb-3 pb-2 border-b">Customer Information</h3>
             <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Bike Price</span>
-                <span>Rs. {bill.bike_price.toLocaleString()}</span>
+              <div>
+                <span className="text-gray-600">Name:</span>
+                <span className="ml-2 font-medium">{bill.customer_name}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">RMV Charge</span>
-                <span>Rs. 13,000.00</span>
+              <div>
+                <span className="text-gray-600">NIC:</span>
+                <span className="ml-2 font-medium">{bill.customer_nic}</span>
               </div>
+              <div>
+                <span className="text-gray-600">Address:</span>
+                <span className="ml-2 font-medium">{bill.customer_address}</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-medium mb-3 pb-2 border-b">Vehicle Information</h3>
+            <div className="space-y-2">
+              <div>
+                <span className="text-gray-600">Model:</span>
+                <span className="ml-2 font-medium">{bill.model_name}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Motor Number:</span>
+                <span className="ml-2 font-medium">{bill.motor_number}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Chassis Number:</span>
+                <span className="ml-2 font-medium">{bill.chassis_number}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Price:</span>
+                <span className="ml-2 font-medium">Rs. {parseInt(bill.bike_price).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <h3 className="text-lg font-medium mb-3 pb-2 border-b">Payment Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <div>
+                <span className="text-gray-600">Bill Type:</span>
+                <span className="ml-2 font-medium capitalize">{bill.bill_type}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Bill Date:</span>
+                <span className="ml-2 font-medium">{new Date(bill.bill_date).toLocaleDateString()}</span>
+              </div>
+              
               {bill.bill_type === 'leasing' && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Down Payment</span>
-                  <span>Rs. {bill.down_payment.toLocaleString()}</span>
+                <div>
+                  <span className="text-gray-600">Down Payment:</span>
+                  <span className="ml-2 font-medium">Rs. {parseInt(bill.down_payment).toLocaleString()}</span>
                 </div>
               )}
-              <div className="border-t pt-2 flex justify-between font-semibold">
-                <span>Total Amount</span>
-                <span>Rs. {bill.total_amount.toLocaleString()}</span>
+
+              {bill.bill_type === 'advancement' && (
+                <>
+                  <div>
+                    <span className="text-gray-600">Advancement Amount:</span>
+                    <span className="ml-2 font-medium">Rs. {parseInt(bill.down_payment).toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Balance Due:</span>
+                    <span className="ml-2 font-medium">Rs. {parseInt(bill.balance_amount).toLocaleString()}</span>
+                  </div>
+                  {bill.estimated_delivery_date && (
+                    <div>
+                      <span className="text-gray-600">Estimated Delivery:</span>
+                      <span className="ml-2 font-medium">{new Date(bill.estimated_delivery_date).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <div className="text-lg">
+                <span className="text-gray-800 font-medium">Total Amount:</span>
+                <span className="ml-2 font-bold">Rs. {parseInt(bill.total_amount).toLocaleString()}</span>
               </div>
+              
+              {bill.original_bill_id && (
+                <div>
+                  <span className="text-gray-600">Converted from Bill:</span>
+                  <a 
+                    href={`/bills/${bill.original_bill_id}`}
+                    className="ml-2 text-blue-600 hover:underline"
+                  >
+                    #{bill.original_bill_id}
+                  </a>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+
+        {/* Advancement Bill Conversion */}
+        {bill.bill_type === 'advancement' && bill.status === 'pending' && (
+          <AdvancementConversion bill={bill} onConversionComplete={handleConversionComplete} />
+        )}
+
+        {/* Bill Actions */}
+        <div className="mt-8 flex flex-wrap justify-end gap-3">
+          <button
+            onClick={handleDownloadPDF}
+            disabled={downloading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center"
+          >
+            <span className="mr-1">↓</span>
+            {downloading ? 'Downloading...' : 'Download PDF'}
+          </button>
+          
+          <button
+            onClick={handlePrintBill}
+            disabled={printing}
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 flex items-center"
+          >
+            <span className="mr-1">🖨️</span>
+            {printing ? 'Printing...' : 'Print Bill'}
+          </button>
+          
+          {bill.status !== 'converted' && (
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center"
+            >
+              <span className="mr-1">🗑️</span>
+              Delete
+            </button>
+          )}
         </div>
       </div>
     </div>

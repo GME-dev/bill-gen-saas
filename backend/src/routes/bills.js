@@ -48,26 +48,121 @@ router.post('/', async (req, res) => {
       motor_number,
       chassis_number,
       bike_price,
-      down_payment = 0
+      down_payment,
+      total_amount,
+      balance_amount,
+      estimated_delivery_date
     } = req.body
 
-    const total_amount = bill_type === 'leasing' ? down_payment : bike_price + 15000
+    // Validate required fields
+    if (!bill_type || !customer_name || !customer_nic || !customer_address || !model_name || !motor_number || !chassis_number || !bike_price) {
+      return res.status(400).json({ error: 'Missing required fields' })
+    }
+
+    // Additional validation for advancement bills
+    if (bill_type === 'advancement' && !balance_amount) {
+      return res.status(400).json({ error: 'Balance amount is required for advancement bills' })
+    }
 
     const db = getDatabase()
+    const today = new Date().toISOString().split('T')[0]
+    
     const result = await db.query(
-      `INSERT INTO bills (
-        bill_type, customer_name, customer_nic, customer_address,
-        model_name, motor_number, chassis_number, bike_price,
-        down_payment, total_amount
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
-      [bill_type, customer_name, customer_nic, customer_address,
-       model_name, motor_number, chassis_number, bike_price,
-       down_payment, total_amount]
+      `INSERT INTO bills 
+      (bill_type, customer_name, customer_nic, customer_address, 
+      model_name, motor_number, chassis_number, bike_price, 
+      down_payment, bill_date, total_amount, balance_amount, 
+      estimated_delivery_date, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *`,
+      [
+        bill_type, 
+        customer_name, 
+        customer_nic, 
+        customer_address, 
+        model_name, 
+        motor_number, 
+        chassis_number, 
+        bike_price, 
+        down_payment || null, 
+        today,
+        total_amount || bike_price,
+        balance_amount || null,
+        estimated_delivery_date || null,
+        bill_type === 'advancement' ? 'pending' : 'completed'
+      ]
     )
 
     res.status(201).json(result.rows[0])
   } catch (error) {
     console.error('Error creating bill:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Convert advancement bill to final bill
+router.post('/:id/convert', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { bill_type, down_payment, total_amount } = req.body
+    
+    // Validate the new bill type
+    if (!bill_type || (bill_type !== 'cash' && bill_type !== 'leasing')) {
+      return res.status(400).json({ error: 'Invalid bill type for conversion. Must be cash or leasing.' })
+    }
+    
+    const db = getDatabase()
+    
+    // Get the original bill
+    const originalBillResult = await db.query('SELECT * FROM bills WHERE id = $1', [id])
+    
+    if (originalBillResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Bill not found' })
+    }
+    
+    const originalBill = originalBillResult.rows[0]
+    
+    // Check if it's an advancement bill and not already converted
+    if (originalBill.bill_type !== 'advancement' || originalBill.status === 'converted') {
+      return res.status(400).json({ error: 'Only pending advancement bills can be converted' })
+    }
+    
+    const today = new Date().toISOString().split('T')[0]
+    
+    // Create a new bill based on the original
+    const newBillResult = await db.query(
+      `INSERT INTO bills 
+      (bill_type, customer_name, customer_nic, customer_address, 
+      model_name, motor_number, chassis_number, bike_price, 
+      down_payment, bill_date, total_amount, original_bill_id, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *`,
+      [
+        bill_type, 
+        originalBill.customer_name, 
+        originalBill.customer_nic, 
+        originalBill.customer_address, 
+        originalBill.model_name, 
+        originalBill.motor_number, 
+        originalBill.chassis_number, 
+        originalBill.bike_price, 
+        down_payment || originalBill.down_payment, 
+        today,
+        total_amount || originalBill.total_amount,
+        originalBill.id,
+        'completed'
+      ]
+    )
+    
+    // Mark the original bill as converted
+    await db.query(
+      'UPDATE bills SET status = $1 WHERE id = $2',
+      ['converted', originalBill.id]
+    )
+    
+    res.status(201).json(newBillResult.rows[0])
+  } catch (error) {
+    console.error('Error converting bill:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 })

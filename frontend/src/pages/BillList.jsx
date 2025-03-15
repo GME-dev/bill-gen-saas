@@ -82,8 +82,35 @@ const BillList = () => {
         return 'bg-green-100 text-green-800'
       case 'pending':
         return 'bg-yellow-100 text-yellow-800'
+      case 'converted':
+        return 'bg-blue-100 text-blue-800'
       default:
         return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getBillTypeBadge = (type) => {
+    switch (type) {
+      case 'cash':
+        return (
+          <span className="bg-green-50 text-green-700 px-2 py-1 rounded-full text-xs">
+            Cash Sale
+          </span>
+        )
+      case 'leasing':
+        return (
+          <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+            Leasing
+          </span>
+        )
+      case 'advancement':
+        return (
+          <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-xs">
+            Advancement
+          </span>
+        )
+      default:
+        return null
     }
   }
 
@@ -123,53 +150,81 @@ const BillList = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {bills.map((bill) => (
-                <tr key={bill.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    #{bill.id}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(bill.bill_date)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {bill.bill_type === 'cash' ? 'Cash Sale' : 'Leasing'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {bill.customer_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {bill.model_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    Rs. {bill.total_amount.toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(bill.status)}`}>
-                      {bill.status || 'Pending'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                    <button
-                      onClick={() => handleDownloadPDF(bill.id, true)}
-                      className="text-blue-600 hover:text-blue-900"
-                    >
-                      Preview
-                    </button>
-                    <button
-                      onClick={() => handleDownloadPDF(bill.id)}
-                      className="text-green-600 hover:text-green-900"
-                    >
-                      Download
-                    </button>
-                    <button
-                      onClick={() => handleDelete(bill.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+              {bills.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
+                    No bills found. Create your first bill!
                   </td>
                 </tr>
-              ))}
+              ) : (
+                bills.map((bill) => (
+                  <tr key={bill.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <a 
+                        href={`/bills/${bill.id}`} 
+                        className="text-blue-600 hover:text-blue-900 hover:underline"
+                      >
+                        #{bill.id}
+                      </a>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(bill.bill_date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {getBillTypeBadge(bill.bill_type)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {bill.customer_name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {bill.model_name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      Rs. {parseInt(bill.total_amount).toLocaleString()}
+                      {bill.bill_type === 'advancement' && (
+                        <div className="text-xs text-gray-500">
+                          Adv: Rs. {parseInt(bill.down_payment).toLocaleString()}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(bill.status)}`}>
+                        {bill.status === 'completed' ? 'Completed' :
+                         bill.status === 'converted' ? 'Converted' :
+                         'Pending'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                      <a
+                        href={`/bills/${bill.id}`}
+                        className="text-indigo-600 hover:text-indigo-900"
+                      >
+                        View
+                      </a>
+                      <button
+                        onClick={() => handleDownloadPDF(bill.id, true)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        Preview
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPDF(bill.id)}
+                        className="text-green-600 hover:text-green-900"
+                      >
+                        Download
+                      </button>
+                      {bill.status !== 'converted' && (
+                        <button
+                          onClick={() => handleDelete(bill.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
