@@ -58,6 +58,13 @@ export class PDFGenerator {
 
     async getModelIsEbicycle(modelName) {
         try {
+            // EMERGENCY OVERRIDE FOR COLA5
+            const upperModelName = (modelName || '').toString().trim().toUpperCase();
+            if (upperModelName.includes('COLA') || upperModelName.includes('X01')) {
+                console.log(`[EMERGENCY OVERRIDE] Forcing model ${modelName} to be an e-bicycle`);
+                return true;
+            }
+            
             // Try to get the is_ebicycle flag from the database
             const db = getDatabase();
             const result = await db.query(
@@ -365,12 +372,19 @@ export class PDFGenerator {
                 if (isEbicycle) {
                     console.log(`[E-BICYCLE DETECTED] Skipping RMV charge for bill #${bill.id}, model ${bill.model_name}`);
                     
+                    // FINAL SAFEGUARD: Override any pre-calculated total amount for e-bicycles
+                    // This ensures the PDF always shows the correct amount regardless of what's in the database
+                    const totalAmount = bikePrice;
+                    console.log(`[FINAL SAFEGUARD] Setting total amount to bike price only: ${totalAmount}`);
+                    
+                    // NEVER show the RMV row for e-bicycles
+                    
                     // For e-bicycles, total is just the bike price with NO RMV
                     this.drawTableRow(
                         page,
                         this.margin,
                         tableY,
-                        ['Total Amount', `${bikePrice.toLocaleString()}/=`],
+                        ['Total Amount', `${totalAmount.toLocaleString()}/=`],
                         boldFont,
                         12,
                         true
