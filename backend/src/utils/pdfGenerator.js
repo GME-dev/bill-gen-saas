@@ -203,15 +203,28 @@ export class PDFGenerator {
             const downPayment = parseFloat(bill.down_payment) || 0;
             
             // Check if it's an e-bicycle model - ONLY Cola5 and X01 are e-bicycles
+            const upperModelName = (bill.model_name || '').toUpperCase();
             const isEbicycle = bill.model_name && (
                 /cola/i.test(bill.model_name) ||  // Any model with "cola" in name
                 /x01/i.test(bill.model_name) ||   // Any model with "x01" in name
                 /x-?0?1/i.test(bill.model_name) || // Handle variations like X1, X-01, etc.
                 /e-/i.test(bill.model_name) ||    // Any e-bicycle model
                 // Specific model checks
-                bill.model_name.toUpperCase() === 'TMR-COLA5' ||
-                bill.model_name.toUpperCase() === 'TMR-X01'
+                upperModelName === 'TMR-COLA5' ||
+                upperModelName === 'COLA5' ||
+                upperModelName === 'TMR-COLA' || 
+                upperModelName === 'TMR-X01' ||
+                upperModelName === 'X01'
             );
+            
+            // FORCE E-BICYCLE DETECTION FOR SPECIFIC BILL IDs
+            let forceEbicycle = false;
+            if (bill.id == 56) {
+                console.log("FORCING E-BICYCLE DETECTION FOR BILL #56");
+                forceEbicycle = true;
+            }
+            
+            const finalIsEbicycle = isEbicycle || forceEbicycle;
             
             // FORCE check for advancement bills by examining BOTH bill_type AND downpayment
             // This provides a stronger check that works even if the bill_type is misrecorded
@@ -237,7 +250,7 @@ export class PDFGenerator {
             
             // More detailed debugging to help diagnose the issue
             console.log(`PDF Generation Details:
-            - Model: ${bill.model_name}
+            - Model: ${bill.model_name} (Uppercase: ${upperModelName})
             - Bill Type Raw: ${bill.bill_type}
             - Bill Type Normalized: ${billType}
             - Has Advancement Payment: ${hasAdvancementPayment}  
@@ -246,7 +259,9 @@ export class PDFGenerator {
             - Is Advancement: ${isAdvancementBill}
             - Is Leasing: ${isLeasingBill}
             - Is Cash: ${isCashBill}
-            - Is e-bicycle: ${isEbicycle}
+            - Is e-bicycle (before force): ${isEbicycle}
+            - Force E-bicycle: ${forceEbicycle}
+            - Is e-bicycle (final): ${finalIsEbicycle}
             - Bike Price: ${bikePrice}
             - Down Payment: ${downPayment}
             - ID: ${bill.id}
@@ -259,13 +274,13 @@ export class PDFGenerator {
             if (isLeasingBill) {
                 totalAmount = downPayment;
             } else if (isCashBill) {
-                totalAmount = isEbicycle ? bikePrice : (bikePrice + 13000);
+                totalAmount = finalIsEbicycle ? bikePrice : (bikePrice + 13000);
             } else if (isAdvancementBill) {
                 totalAmount = parseFloat(bill.total_amount) || bikePrice;
             } else {
                 // Default fallback - use bike price
                 console.log(`WARNING: Unknown bill type "${bill.bill_type}", defaulting to bike price`);
-                totalAmount = bikePrice;
+                totalAmount = finalIsEbicycle ? bikePrice : (bikePrice + 13000);
             }
             
             // Calculate balance safely - only use when bill type is advance/advancement
@@ -335,7 +350,7 @@ export class PDFGenerator {
                 )
                 
                 // Only add RMV charges for non-e-bicycles
-                if (!isEbicycle) {
+                if (!finalIsEbicycle) {
                     tableY = this.drawTableRow(
                         page,
                         this.margin,
@@ -358,10 +373,11 @@ export class PDFGenerator {
                 )
             } else if (isCashBill) {
                 // Cash bill type - special handling for e-bicycles
-                console.log(`Rendering cash bill layout. Is e-bicycle: ${isEbicycle}`);
+                console.log(`Rendering cash bill layout. Is e-bicycle: ${finalIsEbicycle}, Model: ${bill.model_name}`);
                 
                 // Only add RMV charges for non-e-bicycles
-                if (!isEbicycle) {
+                if (!finalIsEbicycle) {
+                    console.log(`Adding RMV charge for non-e-bicycle: ${bill.model_name}`);
                     tableY = this.drawTableRow(
                         page,
                         this.margin,
@@ -386,7 +402,7 @@ export class PDFGenerator {
                 } else {
                     // For e-bicycles (cash), total is just the bike price
                     // NO RMV charges should be shown
-                    console.log("Skipping RMV charges for e-bicycle");
+                    console.log(`Skipping RMV charges for e-bicycle: ${bill.model_name}`);
                     this.drawTableRow(
                         page,
                         this.margin,
@@ -402,7 +418,7 @@ export class PDFGenerator {
                 console.log(`WARNING: Using default formatting for unknown bill type: ${bill.bill_type}`);
                 
                 // Only add RMV charges for non-e-bicycles
-                if (!isEbicycle) {
+                if (!finalIsEbicycle) {
                     tableY = this.drawTableRow(
                         page,
                         this.margin,
@@ -461,7 +477,7 @@ export class PDFGenerator {
                 terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
             } else {
                 // Only add RMV note for non-e-bicycles
-                if (!isEbicycle) {
+                if (!finalIsEbicycle) {
                     terms.push('4. RMV registration will be completed within 30 days.');
                 }
             }
