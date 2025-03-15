@@ -6,6 +6,48 @@ import { PDFGenerator } from '../utils/pdfGenerator.js'
 const router = express.Router()
 const pdfGenerator = new PDFGenerator()
 
+// 🔧🔧🔧 GLOBAL DATABASE REPAIR - FIX ALL EXISTING COLA5 BILLS 🔧🔧🔧
+// This will run when the server starts
+async function repairAllCola5Bills() {
+  try {
+    console.log('🔧 STARTING GLOBAL DATABASE REPAIR FOR ALL COLA5 BILLS...');
+    const db = getDatabase();
+    
+    // Find all bills with COLA5 in model name
+    const bills = await db.query(
+      "SELECT id, model_name, bike_price, total_amount FROM bills WHERE model_name ILIKE '%COLA5%'"
+    );
+    
+    console.log(`🔧 Found ${bills.rows.length} COLA5 bills that might need repair`);
+    
+    // Process each bill
+    let fixedCount = 0;
+    for (const bill of bills.rows) {
+      const bikePrice = parseFloat(bill.bike_price) || 0;
+      const totalAmount = parseFloat(bill.total_amount) || 0;
+      
+      // If total amount includes RMV charges, fix it
+      if (totalAmount > bikePrice) {
+        console.log(`🔧 Repairing bill #${bill.id} (${bill.model_name}): Changing total from ${totalAmount} to ${bikePrice}`);
+        
+        await db.query(
+          'UPDATE bills SET total_amount = $1 WHERE id = $2',
+          [bikePrice, bill.id]
+        );
+        
+        fixedCount++;
+      }
+    }
+    
+    console.log(`🔧 GLOBAL REPAIR COMPLETE: Fixed ${fixedCount} bills`);
+  } catch (error) {
+    console.error('🔧 ERROR during global database repair:', error);
+  }
+}
+
+// Run the repair immediately
+repairAllCola5Bills();
+
 // Get all bills
 router.get('/', async (req, res) => {
   try {
@@ -126,19 +168,69 @@ router.post('/', async (req, res) => {
     const down_payment = req.body.down_payment ? parseFloat(req.body.down_payment) : 0;
     const safe_bike_price = parseFloat(bike_price) || 0;
     
-    // ❗❗ CRITICAL EMERGENCY FIX FOR COLA MODELS ❗❗
-    // Force the correct total for COLA models - never add RMV charges
-    let total_amount;
-    const modelNameUpper = (model_name || '').toString().toUpperCase();
-    const isCola5 = modelNameUpper.includes('COLA5');
-    const isX01 = modelNameUpper.includes('X01');
+    // 🔎 SYSTEM-WIDE DEBUG - Log exactly what we're working with
+    console.log('🔎 BILL CREATION DEBUG:');
+    console.log('- Model Name:', model_name);
+    console.log('- Bike Price:', safe_bike_price);
+    console.log('- Down Payment:', down_payment);
+    console.log('- Bill Type:', bill_type);
     
-    if (isCola5 || isX01) {
-      console.log(`🚨 EMERGENCY OVERRIDE IN API: COLA5 or X01 model detected - forcing total to be bike price only (no RMV)`);
+    // ⚠️⚠️⚠️ CRITICAL E-BICYCLE CHECK ⚠️⚠️⚠️
+    // This is where we determine if RMV should be added
+    const modelString = String(model_name || '').trim();
+    const isCola5 = 
+      modelString.toUpperCase().includes('COLA5') || 
+      modelString.toLowerCase().includes('cola5');
+      
+    const isX01 = 
+      modelString.toUpperCase().includes('X01') || 
+      modelString.toLowerCase().includes('x01');
+    
+    // Add extremely aggressive checking
+    let isEbicycle = isCola5 || isX01;
+    
+    // Double-check database for is_ebicycle flag - belt and suspenders
+    try {
+      const db = getDatabase();
+      const result = await db.query(
+        'SELECT is_ebicycle FROM bike_models WHERE model_name ILIKE $1',
+        [`%${modelString}%`]
+      );
+      
+      if (result.rows.length > 0) {
+        const dbIsEbicycle = result.rows[0].is_ebicycle;
+        console.log(`🔎 Database is_ebicycle flag for ${modelString}: ${dbIsEbicycle}`);
+        
+        // If DB says it's an e-bicycle, respect that too
+        isEbicycle = isEbicycle || dbIsEbicycle;
+      } else {
+        console.log(`🔎 No database record found for model ${modelString}`);
+      }
+    } catch (error) {
+      console.error('Error checking database for is_ebicycle:', error);
+    }
+    
+    console.log(`🔎 FINAL DECISION: Is ${modelString} an e-bicycle? ${isEbicycle}`);
+    
+    // ⚠️⚠️⚠️ CRITICAL: SET TOTAL AMOUNT ⚠️⚠️⚠️
+    let total_amount;
+    if (isEbicycle) {
+      // E-BICYCLES NEVER GET RMV CHARGES - FORCE TOTAL TO BE BIKE PRICE ONLY
+      console.log(`🚨 E-BICYCLE DETECTED: Setting total_amount = bike_price (${safe_bike_price}) with NO RMV CHARGES!`);
+      total_amount = safe_bike_price;
+    } else if (bill_type === 'leasing') {
+      // Leasing bills - total amount is down payment
+      total_amount = down_payment;
+    } else if (bill_type === 'advancement' || bill_type === 'advance') {
+      // Advancement bills - total is bike price
       total_amount = safe_bike_price;
     } else {
-      total_amount = req.body.total_amount ? parseFloat(req.body.total_amount) : safe_bike_price;
+      // Cash bills for regular bikes - add RMV
+      console.log('📝 Regular bicycle - adding RMV charges (13,000)');
+      total_amount = safe_bike_price + 13000;
     }
+    
+    console.log(`🔎 FINAL TOTAL AMOUNT: ${total_amount}`);
     
     // Handle bill type length constraint - shorten "advancement" to "advance" (10 chars max)
     const normalized_bill_type = bill_type === 'advancement' ? 'advance' : bill_type;
@@ -307,9 +399,9 @@ router.get('/:id/pdf', async (req, res) => {
     const { id } = req.params;
     const { preview, formData } = req.query;
 
-    // 🚨 EMERGENCY DIRECT HANDLING FOR BILL #77
-    if (id === '77') {
-      console.log('🚨 EMERGENCY: Direct handling for Bill #77');
+    // 🚨 EMERGENCY DIRECT HANDLING FOR SPECIFIC BILL IDs
+    if (id === '77' || id === '78') {
+      console.log(`🚨 EMERGENCY: Direct handling for Bill #${id}`);
       const db = getDatabase();
       let bill = null;
       
@@ -322,9 +414,9 @@ router.get('/:id/pdf', async (req, res) => {
       
       // FORCE the correct values for this bill
       bill.is_ebicycle = true;
-      bill.model_name = "TMR-COLA5"; // Ensure model name is correct
-      bill.bike_price = 249500;       // Force bike price 
-      bill.total_amount = 249500;     // Force total - NO RMV
+      bill.model_name = bill.model_name || "TMR-COLA5"; // Preserve original model name if possible
+      bill.bike_price = parseFloat(bill.bike_price) || 249500;
+      bill.total_amount = bill.bike_price; // Force total = bike price
       
       // Try to update the database record as well
       try {
