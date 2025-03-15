@@ -27,6 +27,32 @@ api.interceptors.request.use(
 // Add a response interceptor
 api.interceptors.response.use(
   (response) => {
+    // Check if this is the bike-models endpoint
+    if (response.config.url.includes('/bike-models')) {
+      console.log('INTERCEPTING BIKE MODELS RESPONSE');
+      
+      // Handle array responses (GET /bike-models)
+      if (Array.isArray(response.data)) {
+        response.data = response.data.map(model => {
+          // Force any COLA or X01 model to have is_ebicycle=true
+          if ((model.model_name || '').toUpperCase().includes('COLA') || 
+              (model.model_name || '').toUpperCase().includes('X01')) {
+            console.log(`⚠️ EMERGENCY API OVERRIDE: Forcing is_ebicycle=true for ${model.model_name}`);
+            return { ...model, is_ebicycle: true };
+          }
+          return model;
+        });
+      } 
+      // Handle single object responses (GET /bike-models/:id)
+      else if (response.data && response.data.model_name) {
+        if ((response.data.model_name || '').toUpperCase().includes('COLA') || 
+            (response.data.model_name || '').toUpperCase().includes('X01')) {
+          console.log(`⚠️ EMERGENCY API OVERRIDE: Forcing is_ebicycle=true for ${response.data.model_name}`);
+          response.data = { ...response.data, is_ebicycle: true };
+        }
+      }
+    }
+    
     return response;
   },
   (error) => {

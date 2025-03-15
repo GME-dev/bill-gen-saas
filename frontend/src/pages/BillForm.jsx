@@ -34,20 +34,43 @@ export default function BillForm() {
     const bikePrice = parseInt(formData.bike_price) || 0;
     let total = bikePrice;
     
+    console.log('CALCULATE TOTAL DEBUG:');
+    console.log('- Bike price:', bikePrice);
+    console.log('- Current model:', currentModel ? JSON.stringify(currentModel) : 'null');
+    console.log('- Model name:', formData.model_name);
+    
     // Add RMV charges ONLY for regular bikes (not e-bicycles)
-    // Check if we have the current model and it's explicitly NOT an e-bicycle
-    if (currentModel && currentModel.is_ebicycle === false) {
-      // Double-check model name to be super sure (COLA/X01)
-      const modelName = (formData.model_name || '').toUpperCase();
-      const isEbikeName = modelName.includes('COLA') || modelName.includes('X01');
+    // EMERGENCY OVERRIDE: Force any COLA or X01 model to skip RMV charges
+    const modelNameUpper = (formData.model_name || '').toUpperCase();
+    const isCola = modelNameUpper.includes('COLA');
+    const isX01 = modelNameUpper.includes('X01');
+    
+    if (isCola || isX01) {
+      console.log('⚠️ EMERGENCY: Model is COLA5/X01 - SKIPPING RMV CHARGES ENTIRELY');
+      console.log('- Total amount set to bike price only:', bikePrice);
       
-      // Only add RMV if it's definitely not an e-bicycle
-      if (!isEbikeName && formData.bill_type !== 'advancement') {
+      setFormData(prev => ({
+        ...prev,
+        total_amount: bikePrice,
+        balance_amount: formData.bill_type === 'advancement' ? bikePrice - parseInt(formData.down_payment || 0) : 0
+      }));
+      return;
+    }
+    
+    // For non-e-bicycles, check the database flag
+    if (currentModel && currentModel.is_ebicycle === false) {
+      if (formData.bill_type !== 'advancement') {
         console.log('Adding RMV charge for non-e-bicycle model:', formData.model_name);
         const rmvCharge = 13000;
         total += rmvCharge;
       }
+    } else if (currentModel && currentModel.is_ebicycle === true) {
+      console.log('Model is an e-bicycle - NO RMV CHARGES APPLIED');
+    } else {
+      console.log('No model information available, cannot determine if e-bicycle');
     }
+    
+    console.log('- Final total amount:', total);
     
     // Calculate balance for advancement bills
     let balance = 0;
@@ -92,12 +115,31 @@ export default function BillForm() {
     if (name === 'model_name') {
       const selectedModel = bikeModels.find(model => model.model_name === value);
       if (selectedModel) {
+        console.log('SELECTED MODEL DEBUG INFO:');
+        console.log('- Model name:', selectedModel.model_name);
+        console.log('- is_ebicycle flag value:', selectedModel.is_ebicycle);
+        console.log('- is_ebicycle type:', typeof selectedModel.is_ebicycle);
+        console.log('- Full model object:', JSON.stringify(selectedModel));
+        
         setCurrentModel(selectedModel);
+        
+        // COLA5 DEBUG OVERRIDE - Force e-bicycle status for any COLA model
+        if (selectedModel.model_name.toUpperCase().includes('COLA') && !selectedModel.is_ebicycle) {
+          console.log('⚠️ CRITICAL: COLA model found with is_ebicycle=false, applying EMERGENCY OVERRIDE');
+          const correctedModel = {...selectedModel, is_ebicycle: true};
+          setCurrentModel(correctedModel);
+        }
+        
         setFormData(prev => ({
           ...prev,
           [name]: value,
           bike_price: selectedModel.price
         }));
+        
+        // Force a recalculation of total amount
+        setTimeout(() => {
+          calculateTotalAndBalance();
+        }, 100);
       } else {
         setFormData(prev => ({
           ...prev,
@@ -386,11 +428,11 @@ export default function BillForm() {
                 className="form-input w-full rounded-md border-gray-300 bg-gray-100"
                 readOnly
               />
-              {/* Only show RMV charges text if the model is definitely not an e-bicycle */}
+              {/* EMERGENCY OVERRIDE: Never show RMV charges for COLA5/X01 models */}
               {currentModel && 
                currentModel.is_ebicycle === false && 
-               !formData.model_name.toUpperCase().includes('COLA') && 
-               !formData.model_name.toUpperCase().includes('X01') && 
+               !(formData.model_name || '').toUpperCase().includes('COLA') && 
+               !(formData.model_name || '').toUpperCase().includes('X01') && 
                formData.bill_type !== 'advancement' && (
                 <p className="text-sm text-gray-500 mt-1">Includes Rs. 13,000 RMV charges</p>
               )}
