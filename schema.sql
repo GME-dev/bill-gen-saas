@@ -20,19 +20,27 @@ CREATE TABLE IF NOT EXISTS bills (
 
 CREATE TABLE IF NOT EXISTS bike_models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
+    model_name TEXT NOT NULL UNIQUE,
     price REAL NOT NULL,
+    motor_number_prefix TEXT,
+    chassis_number_prefix TEXT,
     is_ebicycle BOOLEAN DEFAULT FALSE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
-INSERT OR IGNORE INTO bike_models (name, price, is_ebicycle) 
-VALUES 
-    ('TMR_COLA5', 450000, TRUE),
-    ('TMR_X01', 350000, TRUE);
+-- Add predefined bike models with is_ebicycle flag
+INSERT OR IGNORE INTO bike_models (model_name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle) VALUES
+    ('TMR-G18', 499500.00, 'G18', 'G18', FALSE),
+    ('TMR-MNK3', 475000.00, 'MNK3', 'MNK3', FALSE),
+    ('TMR-Q1', 449500.00, 'Q1', 'Q1', FALSE),
+    ('TMR-ZL', 399500.00, 'ZL', 'ZL', FALSE),
+    ('TMR-ZS', 349500.00, 'ZS', 'ZS', FALSE),
+    ('TMR-XGW', 299500.00, 'XGW', 'XGW', FALSE),
+    ('TMR-COLA5', 249500.00, 'COLA5', 'COLA5', TRUE),
+    ('TMR-X01', 219500.00, 'X01', 'X01', TRUE);
 
-INSERT OR IGNORE INTO bike_models (name, price, is_ebicycle)
-VALUES
-    ('Model_A', 550000, FALSE),
-    ('Model_B', 650000, FALSE),
-    ('Model_C', 750000, FALSE); 
+-- Sample additional models
+INSERT OR IGNORE INTO bike_models (model_name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle) VALUES
+    ('Model_A', 550000, NULL, NULL, FALSE),
+    ('Model_B', 650000, NULL, NULL, FALSE),
+    ('Model_C', 750000, NULL, NULL, FALSE); 
