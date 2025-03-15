@@ -18,10 +18,74 @@ router.get('/', async (req, res) => {
   }
 })
 
+// Test endpoint to create a bill with predefined data
+router.post('/test', async (req, res) => {
+  try {
+    console.log('Creating test bill');
+    
+    const testBill = {
+      bill_type: 'advancement',
+      customer_name: 'Test Customer',
+      customer_nic: '123456789V',
+      customer_address: 'Test Address, City',
+      model_name: 'TMR-G18',
+      motor_number: 'TEST123456',
+      chassis_number: 'TEST789012',
+      bike_price: 499500,
+      down_payment: 100000,
+      total_amount: 499500,
+      balance_amount: 399500,
+      estimated_delivery_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    };
+    
+    const db = getDatabase();
+    const today = new Date().toISOString().split('T')[0];
+    
+    const result = await db.query(
+      `INSERT INTO bills 
+      (bill_type, customer_name, customer_nic, customer_address, 
+      model_name, motor_number, chassis_number, bike_price, 
+      down_payment, bill_date, total_amount, balance_amount, 
+      estimated_delivery_date, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *`,
+      [
+        testBill.bill_type, 
+        testBill.customer_name, 
+        testBill.customer_nic, 
+        testBill.customer_address, 
+        testBill.model_name, 
+        testBill.motor_number, 
+        testBill.chassis_number, 
+        testBill.bike_price, 
+        testBill.down_payment, 
+        today,
+        testBill.total_amount,
+        testBill.balance_amount,
+        testBill.estimated_delivery_date,
+        'pending'
+      ]
+    );
+
+    console.log('Test bill created successfully:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating test bill:', error.message);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
+});
+
 // Get a single bill
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params
+    
+    // Make sure id is a number
+    if (isNaN(parseInt(id))) {
+      return res.status(400).json({ error: 'Invalid bill ID' })
+    }
+    
     const db = getDatabase()
     const result = await db.query('SELECT * FROM bills WHERE id = $1', [id])
     
@@ -39,80 +103,55 @@ router.get('/:id', async (req, res) => {
 // Create a new bill
 router.post('/', async (req, res) => {
   try {
-    // Log the incoming request for debugging
-    console.log('Creating bill with data:', JSON.stringify(req.body, null, 2));
+    console.log('Creating bill with data:', req.body);
     
-    // Extract fields with default values where appropriate
-    const {
-      bill_type = '',
-      customer_name = '',
-      customer_nic = '',
-      customer_address = '',
-      model_name = '',
-      motor_number = '',
-      chassis_number = '',
-      bike_price = 0,
-      down_payment = 0,
-      total_amount = 0,
-      balance_amount = 0,
-      estimated_delivery_date = null
+    // Basic required field validation
+    const { 
+      bill_type, 
+      customer_name, 
+      customer_nic, 
+      customer_address, 
+      model_name,
+      motor_number,
+      chassis_number,
+      bike_price
     } = req.body;
-
-    // Basic validation
+    
     if (!bill_type || !customer_name || !customer_nic || !customer_address || 
         !model_name || !motor_number || !chassis_number) {
-      console.log('Missing required fields');
       return res.status(400).json({ error: 'Missing required fields' });
     }
-
-    // Format numeric values safely
-    const safeBikePrice = parseFloat(bike_price) || 0;
-    const safeDownPayment = parseFloat(down_payment) || 0;
-    const safeTotalAmount = parseFloat(total_amount) || safeBikePrice;
-    const safeBalanceAmount = parseFloat(balance_amount) || 0;
-
-    // For advancement bills, ensure we have the required fields
+    
+    // Parse numeric values safely
+    const down_payment = req.body.down_payment ? parseFloat(req.body.down_payment) : 0;
+    const safe_bike_price = parseFloat(bike_price) || 0;
+    const total_amount = req.body.total_amount ? parseFloat(req.body.total_amount) : safe_bike_price;
+    const balance_amount = req.body.balance_amount ? parseFloat(req.body.balance_amount) : 0;
+    const estimated_delivery_date = req.body.estimated_delivery_date || null;
+    
+    // Additional validation for advancement bills
     if (bill_type === 'advancement') {
-      if (safeDownPayment <= 0) {
-        console.log('Down payment required for advancement bills');
+      if (down_payment <= 0) {
         return res.status(400).json({ error: 'Down payment is required for advancement bills' });
       }
       
       if (!estimated_delivery_date) {
-        console.log('Estimated delivery date required for advancement bills');
         return res.status(400).json({ error: 'Estimated delivery date is required for advancement bills' });
       }
     }
-
+    
+    // Insert the bill
     const db = getDatabase();
     const today = new Date().toISOString().split('T')[0];
-    
-    // Ensure the motor and chassis numbers aren't empty strings
-    const safeMotorNumber = motor_number || 'N/A';
-    const safeChassisNumber = chassis_number || 'N/A';
-    
-    // Set status based on bill type
     const status = bill_type === 'advancement' ? 'pending' : 'completed';
     
-    // Prepare the query with simpler parameters
-    console.log('Preparing to execute query with values:', {
-      bill_type,
-      customer_name,
-      customer_nic,
-      customer_address,
-      model_name,
-      safeMotorNumber,
-      safeChassisNumber,
-      safeBikePrice,
-      safeDownPayment,
-      today,
-      safeTotalAmount,
-      safeBalanceAmount,
-      estimated_delivery_date,
-      status
+    console.log('Executing query with:', {
+      bill_type, customer_name, customer_nic, customer_address,
+      model_name, motor_number, chassis_number, safe_bike_price,
+      down_payment, today, total_amount, balance_amount, 
+      estimated_delivery_date, status
     });
-
-    // Execute insert query
+    
     const result = await db.query(
       `INSERT INTO bills 
       (bill_type, customer_name, customer_nic, customer_address, 
@@ -127,27 +166,26 @@ router.post('/', async (req, res) => {
         customer_nic, 
         customer_address, 
         model_name, 
-        safeMotorNumber, 
-        safeChassisNumber, 
-        safeBikePrice, 
-        safeDownPayment, 
+        motor_number || 'N/A', 
+        chassis_number || 'N/A', 
+        safe_bike_price, 
+        down_payment, 
         today,
-        safeTotalAmount,
-        safeBalanceAmount,
+        total_amount,
+        balance_amount,
         estimated_delivery_date,
         status
       ]
     );
-
+    
     console.log('Bill created successfully:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
+    return res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating bill:', error.message);
     console.error('Stack trace:', error.stack);
-    res.status(500).json({ 
+    return res.status(500).json({ 
       error: 'Internal server error', 
-      details: error.message,
-      stack: error.stack 
+      details: error.message 
     });
   }
 });
@@ -383,63 +421,5 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete bill' });
   }
 })
-
-// Test endpoint to create a bill with predefined data
-router.post('/test', async (req, res) => {
-  try {
-    console.log('Creating test bill');
-    
-    const testBill = {
-      bill_type: 'advancement',
-      customer_name: 'Test Customer',
-      customer_nic: '123456789V',
-      customer_address: 'Test Address, City',
-      model_name: 'TMR-G18',
-      motor_number: 'TEST123456',
-      chassis_number: 'TEST789012',
-      bike_price: 499500,
-      down_payment: 100000,
-      total_amount: 499500,
-      balance_amount: 399500,
-      estimated_delivery_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    };
-    
-    const db = getDatabase();
-    const today = new Date().toISOString().split('T')[0];
-    
-    const result = await db.query(
-      `INSERT INTO bills 
-      (bill_type, customer_name, customer_nic, customer_address, 
-      model_name, motor_number, chassis_number, bike_price, 
-      down_payment, bill_date, total_amount, balance_amount, 
-      estimated_delivery_date, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      RETURNING *`,
-      [
-        testBill.bill_type, 
-        testBill.customer_name, 
-        testBill.customer_nic, 
-        testBill.customer_address, 
-        testBill.model_name, 
-        testBill.motor_number, 
-        testBill.chassis_number, 
-        testBill.bike_price, 
-        testBill.down_payment, 
-        today,
-        testBill.total_amount,
-        testBill.balance_amount,
-        testBill.estimated_delivery_date,
-        'pending'
-      ]
-    );
-
-    console.log('Test bill created successfully:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating test bill:', error.message);
-    console.error('Stack trace:', error.stack);
-    res.status(500).json({ error: 'Internal server error', details: error.message });
-  }
-});
 
 export default router 
