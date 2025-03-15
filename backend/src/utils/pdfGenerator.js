@@ -57,6 +57,23 @@ export class PDFGenerator {
 
     async generateBill(bill) {
         try {
+            // ===============================================================
+            // FIRST STEP: HARDCODE E-BICYCLE DETECTION - DO THIS BEFORE ANYTHING ELSE
+            // ===============================================================
+            const billModelName = (bill.model_name || '').toString().trim().toUpperCase();
+            
+            // MASTER OVERRIDE FOR E-BICYCLES - ANY MODEL CONTAINING THESE TERMS IS AUTOMATICALLY AN E-BICYCLE
+            const EBICYCLE_MODEL_INDICATORS = ['COLA', 'X01', 'E-BIKE'];
+            
+            // This is the master control for the entire PDF generation process
+            const MASTER_IS_EBICYCLE = EBICYCLE_MODEL_INDICATORS.some(indicator => 
+                billModelName.includes(indicator));
+            
+            console.log(`[CRITICAL E-BICYCLE CHECK] Bill #${bill.id}, Model: ${billModelName}, IS E-BICYCLE: ${MASTER_IS_EBICYCLE}`);
+            
+            // ===============================================================
+            // CONTINUE WITH NORMAL PDF GENERATION
+            // ===============================================================
             const pdfDoc = await PDFDocument.create()
             const page = pdfDoc.addPage([this.pageWidth, this.pageHeight])
             const { width, height } = page.getSize()
@@ -198,34 +215,57 @@ export class PDFGenerator {
                 true
             )
 
-            // Ensure all numbers are properly parsed and handle NaN
+            // ===============================================================
+            // PAYMENT DETAILS - SIMPLIFIED LOGIC WITH MASTER OVERRIDE
+            // ===============================================================
+            
+            // Parse basic numbers
             const bikePrice = parseFloat(bill.bike_price) || 0;
             const downPayment = parseFloat(bill.down_payment) || 0;
             
-            // ██████████████████████████████████████████████████████████████████████
-            // ███ CRITICAL EMERGENCY FIX - DIRECT OVERRIDE FOR COLA5 MODELS      ███
-            // ██████████████████████████████████████████████████████████████████████
+            // Always show bike price row first
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Bike Price', `${bikePrice.toLocaleString()}/=`],
+                font
+            );
             
-            // Directly check bill id and customer name to identify specific problem bills
-            if (bill.id == 59 || (bill.customer_name && bill.customer_name.toLowerCase().includes('cola'))) {
-                console.log(`
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                !!! EMERGENCY OVERRIDE ACTIVATED FOR BILL #${bill.id}                !!!
-                !!! Customer: ${bill.customer_name}                                  !!!
-                !!! Model: ${bill.model_name}                                        !!!
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                `);
-                
-                // Draw bike price row
+            // Determine bill type
+            const billType = (bill.bill_type || '').toLowerCase().trim();
+            const isAdvancement = billType === 'advance' || billType === 'advancement';
+            const isLeasing = billType === 'leasing';
+            
+            // For ADVANCEMENT bills
+            if (isAdvancement && downPayment > 0) {
                 tableY = this.drawTableRow(
                     page,
                     this.margin,
                     tableY,
-                    ['Bike Price', `${bikePrice.toLocaleString()}/=`],
+                    ['Advancement Amount', `${downPayment.toLocaleString()}/=`],
                     font
                 );
                 
-                // Skip any RMV charges - DIRECTLY TO TOTAL
+                const balanceAmount = bikePrice - downPayment;
+                tableY = this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Balance Amount', `${balanceAmount.toLocaleString()}/=`],
+                    font
+                );
+                
+                if (bill.estimated_delivery_date) {
+                    tableY = this.drawTableRow(
+                        page,
+                        this.margin,
+                        tableY,
+                        ['Estimated Delivery Date', new Date(bill.estimated_delivery_date).toLocaleDateString()],
+                        font
+                    );
+                }
+                
                 this.drawTableRow(
                     page,
                     this.margin,
@@ -235,277 +275,28 @@ export class PDFGenerator {
                     12,
                     true
                 );
-                
-                // Terms and Conditions - NO RMV REGISTRATION
-                const termsY = tableY - 80;
-                page.drawText('Terms and Conditions:', {
-                    x: this.margin,
-                    y: termsY,
-                    size: 12,
-                    font: boldFont,
-                });
-
-                const terms = [
-                    '1. All prices are inclusive of taxes.',
-                    '2. Warranty is subject to terms and conditions.',
-                    '3. This is a computer-generated bill.',
-                ];
-                
-                terms.forEach((line, index) => {
-                    page.drawText(line, {
-                        x: this.margin,
-                        y: termsY - 20 - (index * 15),
-                        size: 10,
-                        font,
-                        color: rgb(0.3, 0.3, 0.3),
-                    });
-                });
-                
-                // Footer
-                page.drawText('Thank you for your business!', {
-                    x: width / 2 - 70,
-                    y: this.margin + 15,
-                    size: 12,
-                    font: boldFont,
-                });
-
-                // Signatures
-                const signatureY = this.margin + 60;
-                
-                // Dealer signature
-                page.drawLine({
-                    start: { x: this.margin, y: signatureY },
-                    end: { x: this.margin + 150, y: signatureY },
-                    thickness: 1,
-                    color: rgb(0, 0, 0),
-                });
-                
-                page.drawText('Dealer Signature', {
-                    x: this.margin,
-                    y: signatureY - 15,
-                    size: 10,
-                    font,
-                });
-
-                // Rubber stamp line
-                page.drawLine({
-                    start: { x: width - this.margin - 150, y: signatureY },
-                    end: { x: width - this.margin, y: signatureY },
-                    thickness: 1,
-                    color: rgb(0, 0, 0),
-                });
-                
-                page.drawText('Rubber Stamp', {
-                    x: width - this.margin - 150,
-                    y: signatureY - 15,
-                    size: 10,
-                    font,
-                });
-                
-                // Skip the entire rest of the function - EARLY RETURN
-                return await pdfDoc.save();
             }
-            
-            // If we get here, continue with normal processing
-            
-            // CRITICAL: First check if this is a COLA5 model - guarantee this check
-            const billModelName = (bill.model_name || '').toString().trim();
-            const upperModelName = billModelName.toUpperCase();
-            const isCola5 = billModelName.toLowerCase().includes('cola') || 
-                          upperModelName.includes('COLA') ||
-                          upperModelName === 'TMR-COLA5' || 
-                          upperModelName === 'COLA5' || 
-                          upperModelName === 'TMR-COLA' || 
-                          bill.customer_name?.toLowerCase().includes('cola') ||
-                          bill.id == 56 || 
-                          bill.id == 59;
-                          
-            // EMERGENCY OVERRIDE: Force all COLA5 models to be e-bicycles
-            if (isCola5) {
-                console.log(`!!!! EMERGENCY OVERRIDE: Bill #${bill.id} with model ${billModelName} FORCED to e-bicycle treatment !!!!\n` +
-                           `This will prevent RMV charges and set total amount = bike price`);
-            }
-            
-            // Standard e-bicycle check as backup
-            const isEbicycle = billModelName && (
-                /cola/i.test(billModelName) ||  // Any model with "cola" in name
-                /x01/i.test(billModelName) ||   // Any model with "x01" in name
-                /x-?0?1/i.test(billModelName) || // Handle variations like X1, X-01, etc.
-                /e-/i.test(billModelName) ||    // Any e-bicycle model
-                // Specific model checks
-                upperModelName === 'TMR-COLA5' ||
-                upperModelName === 'COLA5' ||
-                upperModelName === 'TMR-COLA' || 
-                upperModelName === 'TMR-X01' ||
-                upperModelName === 'X01'
-            );
-            
-            // FORCE E-BICYCLE DETECTION FOR SPECIFIC BILL IDs
-            let forceEbicycle = false;
-            if (bill.id == 56 || isCola5) {
-                console.log(`FORCING E-BICYCLE DETECTION FOR BILL #${bill.id}`);
-                forceEbicycle = true;
-            }
-            
-            // Guaranteed E-Bicycle detection
-            const finalIsEbicycle = isEbicycle || forceEbicycle || isCola5;
-            
-            // FORCE check for advancement bills by examining BOTH bill_type AND downpayment
-            // This provides a stronger check that works even if the bill_type is misrecorded
-            const billType = (bill.bill_type || '').toLowerCase().trim();
-            const hasAdvancementPayment = downPayment > 0 && downPayment < parseFloat(bill.total_amount || bikePrice);
-            const hasEstimatedDeliveryDate = !!bill.estimated_delivery_date;
-            
-            // FORCED CHECKS FOR SPECIFIC BILL IDs - Based on the screenshots
-            let forceAdvancementFormat = false;
-            if (bill.id == 54) {
-                console.log("FORCING ADVANCEMENT BILL FORMAT FOR BILL #54");
-                forceAdvancementFormat = true;
-            }
-            
-            // Multiple ways to detect an advancement bill
-            const isAdvancementBill = billType === 'advance' || 
-                                    billType === 'advancement' || 
-                                    (hasAdvancementPayment && hasEstimatedDeliveryDate) ||
-                                    forceAdvancementFormat;
-            
-            const isLeasingBill = billType === 'leasing' && !forceAdvancementFormat;
-            const isCashBill = billType === 'cash' && !forceAdvancementFormat;
-            
-            // !!!! EXTREMELY DETAILED DEBUGGING !!!!
-            console.log(`
-            =================================================
-            [PDF GENERATION DETAILS FOR BILL #${bill.id}]
-            =================================================
-            Original Model Name: "${bill.model_name}"
-            Trimmed Model Name: "${billModelName}"
-            Uppercase Model Name: "${upperModelName}"
-            
-            E-Bicycle Detection:
-            - isCola5 Direct Check: ${isCola5}
-            - Regular isEbicycle: ${isEbicycle}
-            - Force E-bicycle: ${forceEbicycle}
-            - FINAL IS E-BICYCLE: ${finalIsEbicycle}
-            
-            Bill Type Information:
-            - Bill Type Raw: "${bill.bill_type}"
-            - Bill Type Normalized: "${billType}"
-            - Is Advancement: ${isAdvancementBill}
-            - Is Leasing: ${isLeasingBill}
-            - Is Cash: ${isCashBill}
-            
-            Payment Information:
-            - Bike Price: ${bikePrice}
-            - Down Payment: ${downPayment}
-            =================================================
-            `);
-            
-            // For leasing bills, total amount should be just the down payment
-            // For cash bills with RMV, total amount should be bike price + 13000 (if not e-bicycle)
-            // For advancement bills, use the stored total_amount
-            let totalAmount;
-            
-            // EMERGENCY OVERRIDE FOR COLA5: Always use bike price as total amount
-            if (isCola5) {
-                console.log(`COLA5 MODEL OVERRIDE: Setting total amount to bike price (${bikePrice})`);
-                totalAmount = bikePrice;
-            } else if (isLeasingBill) {
-                totalAmount = downPayment;
-            } else if (isCashBill) {
-                totalAmount = finalIsEbicycle ? bikePrice : (bikePrice + 13000);
-            } else if (isAdvancementBill) {
-                totalAmount = parseFloat(bill.total_amount) || bikePrice;
-            } else {
-                // Default fallback - use bike price
-                console.log(`WARNING: Unknown bill type "${bill.bill_type}", defaulting to bike price`);
-                totalAmount = finalIsEbicycle ? bikePrice : (bikePrice + 13000);
-            }
-            
-            // Final override check for COLA5 models
-            if (isCola5 && totalAmount !== bikePrice) {
-                console.log(`WARNING: COLA5 model total amount (${totalAmount}) doesn't match bike price (${bikePrice}). FORCING CORRECTION.`);
-                totalAmount = bikePrice;
-            }
-            
-            // Calculate balance safely - only use when bill type is advance/advancement
-            const balanceAmount = isAdvancementBill ? (totalAmount - downPayment) : 0;
-
-            // Table rows - always show bike price first
-            tableY = this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['Bike Price', `${bikePrice.toLocaleString()}/=`],
-                font
-            )
-
-            // Different rows based on bill type
-            if (isAdvancementBill) {
-                // Advancement bill type - show advancement-specific information
-                console.log(`Rendering advancement bill layout with:
-                - Advancement Amount: ${downPayment}
-                - Balance Amount: ${balanceAmount}
-                - Total Amount: ${totalAmount}`);
-                
-                tableY = this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    ['Advancement Amount', `${downPayment.toLocaleString()}/=`],
-                    font
-                )
-                
-                tableY = this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    ['Balance Amount', `${balanceAmount.toLocaleString()}/=`],
-                    font
-                )
-                
-                if (bill.estimated_delivery_date) {
-                    tableY = this.drawTableRow(
-                        page,
-                        this.margin,
-                        tableY,
-                        ['Estimated Delivery Date', new Date(bill.estimated_delivery_date).toLocaleDateString()],
-                        font
-                    )
-                }
-                
-                // Total row shows total price
-                this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    ['Total Amount', `${totalAmount.toLocaleString()}/=`],
-                    boldFont,
-                    12,
-                    true
-                )
-            } else if (isLeasingBill) {
-                // Leasing bill type
+            // For LEASING bills
+            else if (isLeasing) {
                 tableY = this.drawTableRow(
                     page,
                     this.margin,
                     tableY,
                     ['Down Payment', `${downPayment.toLocaleString()}/=`],
                     font
-                )
+                );
                 
-                // Only add RMV charges for non-e-bicycles
-                if (!finalIsEbicycle && !isCola5) {
+                // Only add RMV for non-e-bicycles
+                if (!MASTER_IS_EBICYCLE) {
                     tableY = this.drawTableRow(
                         page,
                         this.margin,
                         tableY,
                         ['RMV Charge', 'CPZ'],
                         font
-                    )
+                    );
                 }
                 
-                // For leasing bills, the total is JUST the down payment
-                // Do NOT add any extra charges to the displayed total
                 this.drawTableRow(
                     page,
                     this.margin,
@@ -514,14 +305,15 @@ export class PDFGenerator {
                     boldFont,
                     12,
                     true
-                )
-            } else if (isCashBill) {
-                // Cash bill type - special handling for e-bicycles
-                console.log(`Rendering cash bill layout. Is e-bicycle: ${finalIsEbicycle}, Is Cola5: ${isCola5}, Model: ${billModelName}`);
-                
-                // DIRECT COLA5 CHECK - most explicit way to avoid RMV charges on COLA5
-                if (isCola5) {
-                    console.log(`COLA5 MODEL: Skipping RMV charges entirely`);
+                );
+            }
+            // For CASH bills and default
+            else {
+                // CRUCIAL CHECK - Only add RMV for non-e-bicycles
+                if (MASTER_IS_EBICYCLE) {
+                    console.log(`[E-BICYCLE DETECTED] Skipping RMV charge for bill #${bill.id}, model ${billModelName}`);
+                    
+                    // For e-bicycles, total is just the bike price with NO RMV
                     this.drawTableRow(
                         page,
                         this.margin,
@@ -530,126 +322,59 @@ export class PDFGenerator {
                         boldFont,
                         12,
                         true
-                    )
-                } 
-                // Only add RMV charges for non-e-bicycles
-                else if (!finalIsEbicycle) {
-                    console.log(`Adding RMV charge for non-e-bicycle: ${billModelName}`);
+                    );
+                } else {
+                    // Regular bike - add RMV charge
                     tableY = this.drawTableRow(
                         page,
                         this.margin,
                         tableY,
                         ['RMV Charge', '13,000/='],
                         font
-                    )
+                    );
                     
-                    // For cash bills with RMV, add the RMV charge to the bike price
-                    const cashTotalAmount = bikePrice + 13000;
-                    
-                    // Total row for cash with RMV
+                    const totalWithRMV = bikePrice + 13000;
                     this.drawTableRow(
                         page,
                         this.margin,
                         tableY,
-                        ['Total Amount', `${cashTotalAmount.toLocaleString()}/=`],
+                        ['Total Amount', `${totalWithRMV.toLocaleString()}/=`],
                         boldFont,
                         12,
                         true
-                    )
-                } else {
-                    // For e-bicycles (cash), total is just the bike price
-                    // NO RMV charges should be shown
-                    console.log(`Skipping RMV charges for e-bicycle: ${billModelName}`);
-                    this.drawTableRow(
-                        page,
-                        this.margin,
-                        tableY,
-                        ['Total Amount', `${bikePrice.toLocaleString()}/=`],
-                        boldFont,
-                        12,
-                        true
-                    )
-                }
-            } else {
-                // Default/unknown bill type
-                console.log(`WARNING: Using default formatting for unknown bill type: ${bill.bill_type}`);
-                
-                // Direct COLA5 check for unknown bill types
-                if (isCola5) {
-                    console.log(`COLA5 model with unknown bill type: Skipping RMV charges`);
-                    this.drawTableRow(
-                        page,
-                        this.margin,
-                        tableY,
-                        ['Total Amount', `${bikePrice.toLocaleString()}/=`],
-                        boldFont,
-                        12,
-                        true
-                    )
-                }
-                // Only add RMV charges for non-e-bicycles
-                else if (!finalIsEbicycle) {
-                    tableY = this.drawTableRow(
-                        page,
-                        this.margin,
-                        tableY,
-                        ['RMV Charge', '13,000/='],
-                        font
-                    )
-                    
-                    // Default to cash bill calculation with RMV
-                    const cashTotalAmount = bikePrice + 13000;
-                    
-                    this.drawTableRow(
-                        page,
-                        this.margin,
-                        tableY,
-                        ['Total Amount', `${cashTotalAmount.toLocaleString()}/=`],
-                        boldFont,
-                        12,
-                        true
-                    )
-                } else {
-                    // For e-bicycles, total is just the bike price
-                    // NO RMV charges should be shown
-                    this.drawTableRow(
-                        page,
-                        this.margin,
-                        tableY,
-                        ['Total Amount', `${bikePrice.toLocaleString()}/=`],
-                        boldFont,
-                        12,
-                        true
-                    )
+                    );
                 }
             }
-
+            
+            // ===============================================================
+            // TERMS AND CONDITIONS - SIMPLIFIED WITH MASTER OVERRIDE
+            // ===============================================================
+            
             // Terms and Conditions
-            const termsY = tableY - 80
+            const termsY = tableY - 80;
             page.drawText('Terms and Conditions:', {
                 x: this.margin,
                 y: termsY,
                 size: 12,
                 font: boldFont,
-            })
+            });
 
             const terms = [
                 '1. All prices are inclusive of taxes.',
                 '2. Warranty is subject to terms and conditions.',
                 '3. This is a computer-generated bill.',
-            ]
+            ];
             
-            // Add special condition based on bill type
-            if (isLeasingBill) {
+            // Add bill-type specific terms
+            if (isLeasing) {
                 terms.push('4. Balance amount will be settled by the leasing company.');
-            } else if (isAdvancementBill) {
+            } else if (isAdvancement) {
                 terms.push('4. Balance amount must be paid upon delivery of the vehicle.');
                 terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
-            } else {
-                // Only add RMV note for non-e-bicycles and non-COLA5 models
-                if (!finalIsEbicycle && !isCola5) {
-                    terms.push('4. RMV registration will be completed within 30 days.');
-                }
+            } 
+            // Only add RMV registration term for non-e-bicycles
+            else if (!MASTER_IS_EBICYCLE) {
+                terms.push('4. RMV registration will be completed within 30 days.');
             }
 
             terms.forEach((line, index) => {
@@ -659,19 +384,19 @@ export class PDFGenerator {
                     size: 10,
                     font,
                     color: rgb(0.3, 0.3, 0.3),
-                })
-            })
+                });
+            });
 
-            // Footer
+            // Footer and signatures - keep as is
             page.drawText('Thank you for your business!', {
                 x: width / 2 - 70,
                 y: this.margin + 15,
                 size: 12,
                 font: boldFont,
-            })
+            });
 
             // Signatures
-            const signatureY = this.margin + 60
+            const signatureY = this.margin + 60;
             
             // Dealer signature
             page.drawLine({
@@ -679,14 +404,14 @@ export class PDFGenerator {
                 end: { x: this.margin + 150, y: signatureY },
                 thickness: 1,
                 color: rgb(0, 0, 0),
-            })
+            });
             
             page.drawText('Dealer Signature', {
                 x: this.margin,
                 y: signatureY - 15,
                 size: 10,
                 font,
-            })
+            });
 
             // Rubber stamp line
             page.drawLine({
@@ -694,20 +419,20 @@ export class PDFGenerator {
                 end: { x: width - this.margin, y: signatureY },
                 thickness: 1,
                 color: rgb(0, 0, 0),
-            })
+            });
             
             page.drawText('Rubber Stamp', {
                 x: width - this.margin - 150,
                 y: signatureY - 15,
                 size: 10,
                 font,
-            })
+            });
 
             // Generate PDF
-            return await pdfDoc.save()
+            return await pdfDoc.save();
         } catch (error) {
-            console.error('Error generating PDF:', error)
-            throw new Error(`Failed to generate PDF: ${error.message}`)
+            console.error('Error generating PDF:', error);
+            throw new Error(`Failed to generate PDF: ${error.message}`);
         }
     }
 }
