@@ -125,8 +125,20 @@ router.post('/', async (req, res) => {
     // Parse numeric values safely
     const down_payment = req.body.down_payment ? parseFloat(req.body.down_payment) : 0;
     const safe_bike_price = parseFloat(bike_price) || 0;
-    const total_amount = req.body.total_amount ? parseFloat(req.body.total_amount) : safe_bike_price;
-    const estimated_delivery_date = req.body.estimated_delivery_date || null;
+    
+    // ❗❗ CRITICAL EMERGENCY FIX FOR COLA MODELS ❗❗
+    // Force the correct total for COLA models - never add RMV charges
+    let total_amount;
+    const modelNameUpper = (model_name || '').toString().toUpperCase();
+    const isCola5 = modelNameUpper.includes('COLA5');
+    const isX01 = modelNameUpper.includes('X01');
+    
+    if (isCola5 || isX01) {
+      console.log(`🚨 EMERGENCY OVERRIDE IN API: COLA5 or X01 model detected - forcing total to be bike price only (no RMV)`);
+      total_amount = safe_bike_price;
+    } else {
+      total_amount = req.body.total_amount ? parseFloat(req.body.total_amount) : safe_bike_price;
+    }
     
     // Handle bill type length constraint - shorten "advancement" to "advance" (10 chars max)
     const normalized_bill_type = bill_type === 'advancement' ? 'advance' : bill_type;

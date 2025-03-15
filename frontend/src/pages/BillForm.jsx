@@ -40,12 +40,12 @@ export default function BillForm() {
     console.log('- Model name:', formData.model_name);
     
     // Add RMV charges ONLY for regular bikes (not e-bicycles)
-    // EMERGENCY OVERRIDE: Force any COLA or X01 model to skip RMV charges
+    // EMERGENCY OVERRIDE: Force any COLA5 or X01 model to skip RMV charges
     const modelNameUpper = (formData.model_name || '').toUpperCase();
-    const isCola = modelNameUpper.includes('COLA');
+    const isCola5 = modelNameUpper.includes('COLA5');
     const isX01 = modelNameUpper.includes('X01');
     
-    if (isCola || isX01) {
+    if (isCola5 || isX01) {
       console.log('⚠️ EMERGENCY: Model is COLA5/X01 - SKIPPING RMV CHARGES ENTIRELY');
       console.log('- Total amount set to bike price only:', bikePrice);
       
@@ -123,9 +123,9 @@ export default function BillForm() {
         
         setCurrentModel(selectedModel);
         
-        // COLA5 DEBUG OVERRIDE - Force e-bicycle status for any COLA model
-        if (selectedModel.model_name.toUpperCase().includes('COLA') && !selectedModel.is_ebicycle) {
-          console.log('⚠️ CRITICAL: COLA model found with is_ebicycle=false, applying EMERGENCY OVERRIDE');
+        // COLA5 DEBUG OVERRIDE - Force e-bicycle status for any COLA5 model
+        if (selectedModel.model_name.toUpperCase().includes('COLA5') && !selectedModel.is_ebicycle) {
+          console.log('⚠️ CRITICAL: COLA5 model found with is_ebicycle=false, applying EMERGENCY OVERRIDE');
           const correctedModel = {...selectedModel, is_ebicycle: true};
           setCurrentModel(correctedModel);
         }
@@ -431,7 +431,7 @@ export default function BillForm() {
               {/* EMERGENCY OVERRIDE: Never show RMV charges for COLA5/X01 models */}
               {currentModel && 
                currentModel.is_ebicycle === false && 
-               !(formData.model_name || '').toUpperCase().includes('COLA') && 
+               !(formData.model_name || '').toUpperCase().includes('COLA5') && 
                !(formData.model_name || '').toUpperCase().includes('X01') && 
                formData.bill_type !== 'advancement' && (
                 <p className="text-sm text-gray-500 mt-1">Includes Rs. 13,000 RMV charges</p>

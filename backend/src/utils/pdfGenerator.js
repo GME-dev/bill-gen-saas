@@ -60,7 +60,7 @@ export class PDFGenerator {
         try {
             // EMERGENCY OVERRIDE FOR COLA5
             const upperModelName = (modelName || '').toString().trim().toUpperCase();
-            if (upperModelName.includes('COLA') || upperModelName.includes('X01')) {
+            if (upperModelName.includes('COLA5') || upperModelName.includes('X01')) {
                 console.log(`[EMERGENCY OVERRIDE] Forcing model ${modelName} to be an e-bicycle`);
                 return true;
             }
@@ -98,6 +98,13 @@ export class PDFGenerator {
 
     async generateBill(bill) {
         try {
+            // ❗❗❗ ABSOLUTE EMERGENCY OVERRIDE ❗❗❗
+            // For any COLA5 model, directly use the emergency PDF method with no RMV charges
+            if ((bill.model_name || '').toString().toUpperCase().includes('COLA5')) {
+                console.log(`🚨 EMERGENCY: Using special no-RMV PDF for COLA5 model: ${bill.model_name}`);
+                return this.createEmergencyPdfForCola(bill);
+            }
+            
             console.log(`
             ##########################################################################
             # GENERATING PDF FOR BILL #${bill.id}

@@ -34,8 +34,8 @@ api.interceptors.response.use(
       // Handle array responses (GET /bike-models)
       if (Array.isArray(response.data)) {
         response.data = response.data.map(model => {
-          // Force any COLA or X01 model to have is_ebicycle=true
-          if ((model.model_name || '').toUpperCase().includes('COLA') || 
+          // Force any COLA5 or X01 model to have is_ebicycle=true
+          if ((model.model_name || '').toUpperCase().includes('COLA5') || 
               (model.model_name || '').toUpperCase().includes('X01')) {
             console.log(`⚠️ EMERGENCY API OVERRIDE: Forcing is_ebicycle=true for ${model.model_name}`);
             return { ...model, is_ebicycle: true };
@@ -45,7 +45,7 @@ api.interceptors.response.use(
       } 
       // Handle single object responses (GET /bike-models/:id)
       else if (response.data && response.data.model_name) {
-        if ((response.data.model_name || '').toUpperCase().includes('COLA') || 
+        if ((response.data.model_name || '').toUpperCase().includes('COLA5') || 
             (response.data.model_name || '').toUpperCase().includes('X01')) {
           console.log(`⚠️ EMERGENCY API OVERRIDE: Forcing is_ebicycle=true for ${response.data.model_name}`);
           response.data = { ...response.data, is_ebicycle: true };
