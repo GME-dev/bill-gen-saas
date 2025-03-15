@@ -54,14 +54,21 @@ router.post('/', async (req, res) => {
       estimated_delivery_date
     } = req.body
 
+    console.log('Creating bill with data:', JSON.stringify(req.body, null, 2))
+
     // Validate required fields
     if (!bill_type || !customer_name || !customer_nic || !customer_address || !model_name || !motor_number || !chassis_number || !bike_price) {
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
     // Additional validation for advancement bills
-    if (bill_type === 'advancement' && !balance_amount) {
-      return res.status(400).json({ error: 'Balance amount is required for advancement bills' })
+    if (bill_type === 'advancement') {
+      if (!down_payment || parseFloat(down_payment) <= 0) {
+        return res.status(400).json({ error: 'Down payment is required for advancement bills' })
+      }
+      if (!estimated_delivery_date) {
+        return res.status(400).json({ error: 'Estimated delivery date is required for advancement bills' })
+      }
     }
 
     const db = getDatabase()
@@ -95,8 +102,9 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(result.rows[0])
   } catch (error) {
-    console.error('Error creating bill:', error)
-    res.status(500).json({ error: 'Internal server error' })
+    console.error('Error creating bill:', error.message)
+    console.error('Stack trace:', error.stack)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 

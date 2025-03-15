@@ -89,6 +89,17 @@ const BillList = () => {
     }
   }
 
+  const handleStatusChange = async (billId, newStatus) => {
+    try {
+      await api.patch(`/bills/${billId}`, { status: newStatus })
+      fetchBills()
+      toast.success(`Bill status updated to ${newStatus}`)
+    } catch (error) {
+      console.error('Error updating status:', error)
+      toast.error('Failed to update status')
+    }
+  }
+
   const getBillTypeBadge = (type) => {
     switch (type) {
       case 'cash':
@@ -188,11 +199,22 @@ const BillList = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(bill.status)}`}>
-                        {bill.status === 'completed' ? 'Completed' :
-                         bill.status === 'converted' ? 'Converted' :
-                         'Pending'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(bill.status)}`}>
+                          {bill.status === 'completed' ? 'Completed' :
+                           bill.status === 'converted' ? 'Converted' :
+                           'Pending'}
+                        </span>
+                        {bill.status === 'pending' && bill.bill_type !== 'advancement' && (
+                          <button
+                            onClick={() => handleStatusChange(bill.id, 'completed')}
+                            className="text-xs text-green-600 hover:text-green-900"
+                            title="Mark as completed"
+                          >
+                            ✓
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                       <a

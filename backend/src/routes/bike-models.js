@@ -11,8 +11,8 @@ router.get('/', async (req, res) => {
         
         let query = 'SELECT id, name as model_name, price, is_ebicycle FROM bike_models';
         
-        // Filter out e-bicycles for leasing bills
-        if (bill_type === 'leasing') {
+        // Filter out e-bicycles for leasing and advancement bills
+        if (bill_type === 'leasing' || bill_type === 'advancement') {
             query += ' WHERE is_ebicycle = FALSE';
         }
         

@@ -59,9 +59,9 @@ export default function BillForm() {
     const fetchBikeModels = async () => {
       try {
         setLoading(true)
-        // Filter models if bill type is leasing
-        const url = formData.bill_type === 'leasing' 
-          ? '/bike-models?bill_type=leasing'
+        // Filter models if bill type is leasing or advancement
+        const url = (formData.bill_type === 'leasing' || formData.bill_type === 'advancement') 
+          ? `/bike-models?bill_type=${formData.bill_type}`
           : '/bike-models';
           
         const response = await api.get(url)
@@ -106,8 +106,8 @@ export default function BillForm() {
   const handleBillTypeChange = (e) => {
     const newBillType = e.target.value;
     
-    // Reset model selection if switching to leasing and current model is e-bicycle
-    if (newBillType === 'leasing' && currentModel?.is_ebicycle) {
+    // Reset model selection if switching to leasing or advancement and current model is e-bicycle
+    if ((newBillType === 'leasing' || newBillType === 'advancement') && currentModel?.is_ebicycle) {
       setCurrentModel(null);
       setFormData(prev => ({
         ...prev,

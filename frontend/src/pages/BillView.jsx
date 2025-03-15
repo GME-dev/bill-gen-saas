@@ -186,15 +186,22 @@ export default function BillView() {
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Bill #{bill.id}</h2>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            bill.status === 'completed' ? 'bg-green-100 text-green-800' :
-            bill.status === 'converted' ? 'bg-blue-100 text-blue-800' :
-            'bg-yellow-100 text-yellow-800'
-          }`}>
-            {bill.status === 'completed' ? 'Completed' :
-             bill.status === 'converted' ? 'Converted' :
-             'Pending'}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={getStatusBadgeClass(bill.status)}>
+              {bill.status === 'completed' ? 'Completed' :
+              bill.status === 'converted' ? 'Converted' :
+              'Pending'}
+            </span>
+            
+            {bill.status === 'pending' && bill.bill_type !== 'advancement' && (
+              <button
+                onClick={() => handleStatusChange('completed')}
+                className="px-3 py-1 text-sm font-medium bg-green-500 text-white rounded-md hover:bg-green-600"
+              >
+                Mark as Completed
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
