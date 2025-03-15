@@ -39,6 +39,9 @@ router.get('/:id', async (req, res) => {
 // Create a new bill
 router.post('/', async (req, res) => {
   try {
+    // Log request body for debugging
+    console.log('Creating bill with data:', JSON.stringify(req.body, null, 2))
+    
     const {
       bill_type,
       customer_name,
@@ -54,25 +57,43 @@ router.post('/', async (req, res) => {
       estimated_delivery_date
     } = req.body
 
-    console.log('Creating bill with data:', JSON.stringify(req.body, null, 2))
-
     // Validate required fields
     if (!bill_type || !customer_name || !customer_nic || !customer_address || !model_name || !motor_number || !chassis_number || !bike_price) {
+      console.log('Missing required fields')
       return res.status(400).json({ error: 'Missing required fields' })
     }
 
     // Additional validation for advancement bills
     if (bill_type === 'advancement') {
-      if (!down_payment || parseFloat(down_payment) <= 0) {
+      if (!down_payment || isNaN(parseFloat(down_payment)) || parseFloat(down_payment) <= 0) {
+        console.log('Invalid down payment for advancement bill:', down_payment)
         return res.status(400).json({ error: 'Down payment is required for advancement bills' })
       }
       if (!estimated_delivery_date) {
+        console.log('Missing estimated delivery date for advancement bill')
         return res.status(400).json({ error: 'Estimated delivery date is required for advancement bills' })
       }
     }
 
     const db = getDatabase()
     const today = new Date().toISOString().split('T')[0]
+    
+    console.log('Preparing to insert bill:', {
+      bill_type,
+      customer_name,
+      customer_nic,
+      customer_address,
+      model_name,
+      motor_number,
+      chassis_number,
+      bike_price,
+      down_payment: down_payment || null,
+      today,
+      total_amount: total_amount || bike_price,
+      balance_amount: balance_amount || null,
+      estimated_delivery_date: estimated_delivery_date || null,
+      status: bill_type === 'advancement' ? 'pending' : 'completed'
+    })
     
     const result = await db.query(
       `INSERT INTO bills 
@@ -90,16 +111,17 @@ router.post('/', async (req, res) => {
         model_name, 
         motor_number, 
         chassis_number, 
-        bike_price, 
-        down_payment || null, 
+        parseFloat(bike_price), 
+        down_payment ? parseFloat(down_payment) : null, 
         today,
-        total_amount || bike_price,
-        balance_amount || null,
+        total_amount ? parseFloat(total_amount) : parseFloat(bike_price),
+        balance_amount ? parseFloat(balance_amount) : null,
         estimated_delivery_date || null,
         bill_type === 'advancement' ? 'pending' : 'completed'
       ]
     )
 
+    console.log('Bill created successfully:', result.rows[0])
     res.status(201).json(result.rows[0])
   } catch (error) {
     console.error('Error creating bill:', error.message)
