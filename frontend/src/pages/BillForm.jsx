@@ -128,10 +128,13 @@ export default function BillForm() {
     
     try {
       setLoading(true);
+      setSubmitting(true);
       
       // Validate fields
       if (!formData.bill_type) {
         toast.error('Please select a bill type');
+        setSubmitting(false);
+        setLoading(false);
         return;
       }
       
@@ -146,25 +149,22 @@ export default function BillForm() {
       // Validate that chassis and motor numbers are provided
       if (!submitData.chassis_number || !submitData.motor_number) {
         toast.error('Please provide both chassis and motor numbers');
+        setSubmitting(false);
+        setLoading(false);
         return;
       }
       
-      if (isEditMode) {
-        // Handle edit mode
-        await api.put(`/bills/${id}`, submitData);
-        toast.success('Bill updated successfully');
-      } else {
-        // Handle create mode
-        await api.post('/bills', submitData);
-        toast.success('Bill created successfully');
-      }
+      // Create the bill
+      const response = await api.post('/bills', submitData);
+      console.log('Bill created successfully:', response.data);
+      toast.success('Bill created successfully');
       
-      // Navigate back to bills list
-      navigate('/bills');
+      // Navigate to the bill view page
+      navigate(`/bills/${response.data.id}`);
     } catch (error) {
       console.error('Error creating bill:', error);
-      toast.error(error.response?.data?.message || 'Failed to save bill');
-    } finally {
+      toast.error(error.response?.data?.error || 'Failed to save bill');
+      setSubmitting(false);
       setLoading(false);
     }
   };
