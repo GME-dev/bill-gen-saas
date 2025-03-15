@@ -201,7 +201,27 @@ export class PDFGenerator {
             // Ensure all numbers are properly parsed and handle NaN
             const bikePrice = parseFloat(bill.bike_price) || 0;
             const downPayment = parseFloat(bill.down_payment) || 0;
-            const totalAmount = parseFloat(bill.total_amount) || bikePrice;
+            
+            // Check if it's an e-bicycle model
+            const isEbicycle = bill.model_name && (
+                bill.model_name.toLowerCase().includes('cola') ||
+                bill.model_name.toLowerCase().includes('x01') ||
+                bill.model_name.toLowerCase().includes('e-')
+            );
+            
+            // For leasing bills, total amount should be just the down payment
+            // For cash bills with RMV, total amount should be bike price + 13000 (if not e-bicycle)
+            // For advancement bills, use the stored total_amount
+            let totalAmount;
+            if (bill.bill_type === 'leasing') {
+                totalAmount = downPayment;
+            } else if (bill.bill_type === 'cash') {
+                totalAmount = isEbicycle ? bikePrice : (bikePrice + 13000);
+            } else {
+                // For advancement bills, use the stored total_amount
+                totalAmount = parseFloat(bill.total_amount) || bikePrice;
+            }
+            
             // Calculate balance safely - only use when bill type is advance/advancement
             const balanceAmount = (bill.bill_type === 'advance' || bill.bill_type === 'advancement') ? 
                 (totalAmount - downPayment) : 0;
@@ -214,13 +234,6 @@ export class PDFGenerator {
                 ['Bike Price', `${bikePrice.toLocaleString()}/=`],
                 font
             )
-
-            // Check if it's an e-bicycle model
-            const isEbicycle = bill.model_name && (
-                bill.model_name.toLowerCase().includes('cola') ||
-                bill.model_name.toLowerCase().includes('x01') ||
-                bill.model_name.toLowerCase().includes('e-')
-            );
 
             // Different rows based on bill type
             if (bill.bill_type === 'advance' || bill.bill_type === 'advancement') {
@@ -282,7 +295,8 @@ export class PDFGenerator {
                     )
                 }
                 
-                // Total row with (D/P) for leasing
+                // For leasing bills, the total is JUST the down payment
+                // Do NOT add any extra charges to the displayed total
                 this.drawTableRow(
                     page,
                     this.margin,
@@ -305,7 +319,7 @@ export class PDFGenerator {
                         font
                     )
                     
-                    // Calculate total amount for cash with RMV
+                    // For cash bills with RMV, add the RMV charge to the bike price
                     const cashTotalAmount = bikePrice + 13000;
                     
                     // Total row for cash with RMV
@@ -319,7 +333,7 @@ export class PDFGenerator {
                         true
                     )
                 } else {
-                    // For e-bicycles, no RMV charge
+                    // For e-bicycles (cash), total is just the bike price
                     this.drawTableRow(
                         page,
                         this.margin,
