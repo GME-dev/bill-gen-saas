@@ -202,12 +202,19 @@ export class PDFGenerator {
             const bikePrice = parseFloat(bill.bike_price) || 0;
             const downPayment = parseFloat(bill.down_payment) || 0;
             
-            // Check if it's an e-bicycle model
+            // Check if it's an e-bicycle model - be more specific with model detection
             const isEbicycle = bill.model_name && (
-                bill.model_name.toLowerCase().includes('cola') ||
-                bill.model_name.toLowerCase().includes('x01') ||
-                bill.model_name.toLowerCase().includes('e-')
+                /cola/i.test(bill.model_name) ||  // Any model with "cola" in name
+                /x01/i.test(bill.model_name) ||   // Any model with "x01" in name
+                /x-?0?1/i.test(bill.model_name) || // Handle variations like X1, X-01, etc.
+                /e-/i.test(bill.model_name) ||    // Any e-bicycle model
+                // Specific model checks
+                bill.model_name.toUpperCase() === 'TMR-COLA5' ||
+                bill.model_name.toUpperCase() === 'TMR-X01'
             );
+            
+            // For debugging
+            console.log(`PDF Generation - Model: ${bill.model_name}, Detected as e-bicycle: ${isEbicycle}`);
             
             // For leasing bills, total amount should be just the down payment
             // For cash bills with RMV, total amount should be bike price + 13000 (if not e-bicycle)
@@ -307,7 +314,7 @@ export class PDFGenerator {
                     true
                 )
             } else {
-                // Cash bill type
+                // Cash bill type - special handling for e-bicycles
                 
                 // Only add RMV charges for non-e-bicycles
                 if (!isEbicycle) {
@@ -334,6 +341,7 @@ export class PDFGenerator {
                     )
                 } else {
                     // For e-bicycles (cash), total is just the bike price
+                    // NO RMV charges should be shown
                     this.drawTableRow(
                         page,
                         this.margin,
