@@ -34,10 +34,19 @@ export default function BillForm() {
     const bikePrice = parseInt(formData.bike_price) || 0;
     let total = bikePrice;
     
-    // Add RMV charges for regular bikes (not e-bicycles)
-    if (!currentModel?.is_ebicycle && formData.bill_type !== 'advancement') {
-      const rmvCharge = 13000;
-      total += rmvCharge;
+    // Add RMV charges ONLY for regular bikes (not e-bicycles)
+    // Check if we have the current model and it's explicitly NOT an e-bicycle
+    if (currentModel && currentModel.is_ebicycle === false) {
+      // Double-check model name to be super sure (COLA/X01)
+      const modelName = (formData.model_name || '').toUpperCase();
+      const isEbikeName = modelName.includes('COLA') || modelName.includes('X01');
+      
+      // Only add RMV if it's definitely not an e-bicycle
+      if (!isEbikeName && formData.bill_type !== 'advancement') {
+        console.log('Adding RMV charge for non-e-bicycle model:', formData.model_name);
+        const rmvCharge = 13000;
+        total += rmvCharge;
+      }
     }
     
     // Calculate balance for advancement bills
@@ -377,7 +386,12 @@ export default function BillForm() {
                 className="form-input w-full rounded-md border-gray-300 bg-gray-100"
                 readOnly
               />
-              {!currentModel?.is_ebicycle && formData.bill_type !== 'advancement' && (
+              {/* Only show RMV charges text if the model is definitely not an e-bicycle */}
+              {currentModel && 
+               currentModel.is_ebicycle === false && 
+               !formData.model_name.toUpperCase().includes('COLA') && 
+               !formData.model_name.toUpperCase().includes('X01') && 
+               formData.bill_type !== 'advancement' && (
                 <p className="text-sm text-gray-500 mt-1">Includes Rs. 13,000 RMV charges</p>
               )}
             </div>

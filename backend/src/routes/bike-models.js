@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
         const { bill_type } = req.query;
         const db = getDatabase();
         
-        let query = 'SELECT id, name as model_name, price, is_ebicycle FROM bike_models';
+        let query = 'SELECT id, model_name, price, is_ebicycle FROM bike_models';
         
         // Filter out e-bicycles only for leasing bills
         if (bill_type === 'leasing') {
@@ -32,7 +32,7 @@ router.get('/:id', async (req, res) => {
         const { id } = req.params;
         const db = getDatabase();
         const result = await db.query(
-            'SELECT id, name as model_name, price, is_ebicycle FROM bike_models WHERE id = $1',
+            'SELECT id, model_name, price, is_ebicycle FROM bike_models WHERE id = $1',
             [id]
         );
         
@@ -50,11 +50,11 @@ router.get('/:id', async (req, res) => {
 // Add a new bike model
 router.post('/', async (req, res) => {
     try {
-        const { name, price, is_ebicycle = false } = req.body;
+        const { model_name, price, is_ebicycle = false } = req.body;
         const db = getDatabase();
         const result = await db.query(
-            'INSERT INTO bike_models (name, price, is_ebicycle) VALUES ($1, $2, $3) RETURNING *',
-            [name, price, is_ebicycle]
+            'INSERT INTO bike_models (model_name, price, is_ebicycle) VALUES ($1, $2, $3) RETURNING *',
+            [model_name, price, is_ebicycle]
         );
         res.status(201).json(result.rows[0]);
     } catch (error) {
@@ -67,11 +67,11 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, price, is_ebicycle } = req.body;
+        const { model_name, price, is_ebicycle } = req.body;
         const db = getDatabase();
         const result = await db.query(
-            'UPDATE bike_models SET name = $1, price = $2, is_ebicycle = $3 WHERE id = $4 RETURNING *',
-            [name, price, is_ebicycle, id]
+            'UPDATE bike_models SET model_name = $1, price = $2, is_ebicycle = $3 WHERE id = $4 RETURNING *',
+            [model_name, price, is_ebicycle, id]
         );
         
         if (result.rows.length === 0) {
