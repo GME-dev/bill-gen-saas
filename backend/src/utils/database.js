@@ -101,7 +101,8 @@ export async function initializeDatabase() {
           model_name VARCHAR(100) NOT NULL UNIQUE,
           price DECIMAL(10,2) NOT NULL,
           motor_number_prefix VARCHAR(20),
-          chassis_number_prefix VARCHAR(20)
+          chassis_number_prefix VARCHAR(20),
+          is_ebicycle BOOLEAN DEFAULT FALSE
         )
       `)
 
@@ -110,17 +111,39 @@ export async function initializeDatabase() {
       if (existingModels.rows[0].count === '0') {
         console.log('Inserting predefined bike models...')
         await client.query(`
-          INSERT INTO bike_models (model_name, price, motor_number_prefix, chassis_number_prefix) VALUES
-          ('TMR-G18', 499500.00, 'G18', 'G18'),
-          ('TMR-MNK3', 475000.00, 'MNK3', 'MNK3'),
-          ('TMR-Q1', 449500.00, 'Q1', 'Q1'),
-          ('TMR-ZL', 399500.00, 'ZL', 'ZL'),
-          ('TMR-ZS', 349500.00, 'ZS', 'ZS'),
-          ('TMR-XGW', 299500.00, 'XGW', 'XGW'),
-          ('TMR-COLA5', 249500.00, 'COLA5', 'COLA5'),
-          ('TMR-X01', 219500.00, 'X01', 'X01')
+          INSERT INTO bike_models (model_name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle) VALUES
+          ('TMR-G18', 499500.00, 'G18', 'G18', FALSE),
+          ('TMR-MNK3', 475000.00, 'MNK3', 'MNK3', FALSE),
+          ('TMR-Q1', 449500.00, 'Q1', 'Q1', FALSE),
+          ('TMR-ZL', 399500.00, 'ZL', 'ZL', FALSE),
+          ('TMR-ZS', 349500.00, 'ZS', 'ZS', FALSE),
+          ('TMR-XGW', 299500.00, 'XGW', 'XGW', FALSE),
+          ('TMR-COLA5', 249500.00, 'COLA5', 'COLA5', TRUE),
+          ('TMR-X01', 219500.00, 'X01', 'X01', TRUE)
         `)
-        console.log('Predefined bike models inserted')
+      }
+      
+      // Check if the is_ebicycle column exists, if not add it
+      try {
+        const columnCheckResult = await client.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name='bike_models' AND column_name='is_ebicycle'
+        `);
+        
+        if (columnCheckResult.rows.length === 0) {
+          console.log('Adding is_ebicycle column to bike_models table...');
+          await client.query(`ALTER TABLE bike_models ADD COLUMN is_ebicycle BOOLEAN DEFAULT FALSE`);
+          
+          // Update COLA5 and X01 to be e-bicycles
+          await client.query(`
+            UPDATE bike_models 
+            SET is_ebicycle = TRUE 
+            WHERE model_name LIKE '%COLA%' OR model_name LIKE '%X01%'
+          `);
+        }
+      } catch (error) {
+        console.error('Error checking/adding is_ebicycle column:', error);
       }
     } finally {
       client.release()

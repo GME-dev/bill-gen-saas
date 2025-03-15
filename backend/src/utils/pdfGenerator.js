@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { fontManager } from './fontManager.js'
 import { COMPANY_INFO, PDF_SETTINGS, BRANDING_CONFIG } from '../config/constants.js'
+import { getDatabase } from './database.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -55,58 +56,76 @@ export class PDFGenerator {
         return y - rowHeight;
     }
 
+    async getModelIsEbicycle(modelName) {
+        try {
+            // Try to get the is_ebicycle flag from the database
+            const db = getDatabase();
+            const result = await db.query(
+                'SELECT is_ebicycle FROM bike_models WHERE model_name = $1',
+                [modelName]
+            );
+            
+            if (result.rows.length > 0) {
+                console.log(`[DB INFO] Model ${modelName} found in database: is_ebicycle = ${result.rows[0].is_ebicycle}`);
+                return result.rows[0].is_ebicycle;
+            }
+            
+            // If not found, try a LIKE query
+            const likeResult = await db.query(
+                "SELECT is_ebicycle FROM bike_models WHERE model_name ILIKE $1",
+                [`%${modelName}%`]
+            );
+            
+            if (likeResult.rows.length > 0) {
+                console.log(`[DB INFO] Model similar to ${modelName} found in database: is_ebicycle = ${likeResult.rows[0].is_ebicycle}`);
+                return likeResult.rows[0].is_ebicycle;
+            }
+            
+            console.log(`[DB WARNING] Model ${modelName} not found in database, falling back to string matching`);
+            return null;
+        } catch (error) {
+            console.error(`[DB ERROR] Error getting is_ebicycle for model ${modelName}:`, error);
+            return null;
+        }
+    }
+
     async generateBill(bill) {
         try {
             console.log(`
             ##########################################################################
-            # ULTRA EMERGENCY OVERRIDE FOR BILL #${bill.id}
+            # GENERATING PDF FOR BILL #${bill.id}
             # Model: ${bill.model_name}
             # Customer: ${bill.customer_name}
             ##########################################################################
             `);
             
-            // DRASTIC MEASURE: CHECK SPECIFICALLY FOR "TMR-COLA5" IN ANY CASE OR FORMAT
-            const rawModelName = (bill.model_name || '').toString();
-            const normalizedModelName = rawModelName.toLowerCase().replace(/\s+/g, '');
+            // 1. FIRST CHECK DATABASE FOR DEFINITIVE ANSWER ON E-BICYCLE STATUS
+            const dbIsEbicycle = await this.getModelIsEbicycle(bill.model_name);
             
-            // ULTRA FORCED OVERRIDE - ANY COLA MODEL IS PROCESSED DIFFERENTLY
-            const isForcedCola = normalizedModelName.includes('cola') || 
-                                normalizedModelName.includes('tmr-cola') ||
-                                rawModelName.includes('COLA') ||
-                                bill.id >= 59; // Force all bills from #59 onward
-                                
-            if (isForcedCola) {
-                console.log(`
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                !!! ULTRA EMERGENCY: DETECTED COLA MODEL IN BILL #${bill.id}
-                !!! BYPASSING ALL NORMAL PDF GENERATION FOR "${rawModelName}"
-                !!! FORCING DIRECT PDF GENERATION WITH NO RMV CHARGES
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                `);
-                
-                // Create an emergency PDF with no RMV charges
-                return this.createEmergencyPdfForCola(bill);
+            // Only if database lookup fails, fall back to string matching
+            let isEbicycle = false;
+            
+            if (dbIsEbicycle !== null) {
+                // Use database value if available
+                isEbicycle = dbIsEbicycle;
+                console.log(`[DB SUCCESS] Using database is_ebicycle value: ${isEbicycle}`);
+            } else {
+                // Fall back to string matching
+                const modelName = (bill.model_name || '').toString().trim().toUpperCase();
+                isEbicycle = modelName.includes('COLA') || 
+                             modelName.includes('X01') || 
+                             modelName.includes('E-');
+                console.log(`[STRING MATCHING] Determined is_ebicycle = ${isEbicycle} for model ${modelName}`);
             }
             
-            // ===============================================================
-            // If we get here, continue with previous logic (non-COLA models)
-            // ===============================================================
+            console.log(`[FINAL DECISION] Model ${bill.model_name} is_ebicycle = ${isEbicycle}`);
             
-            // FIRST STEP: HARDCODE E-BICYCLE DETECTION - DO THIS BEFORE ANYTHING ELSE
-            const billModelName = (bill.model_name || '').toString().trim().toUpperCase();
+            // 2. FOR COLA MODELS, ALWAYS SKIP RMV CHARGES
+            if (isEbicycle) {
+                console.log(`[E-BICYCLE DETECTED] Processing bill #${bill.id} as an e-bicycle - NO RMV CHARGES WILL BE ADDED`);
+            }
             
-            // MASTER OVERRIDE FOR E-BICYCLES - ANY MODEL CONTAINING THESE TERMS IS AUTOMATICALLY AN E-BICYCLE
-            const EBICYCLE_MODEL_INDICATORS = ['COLA', 'X01', 'E-BIKE'];
-            
-            // This is the master control for the entire PDF generation process
-            const MASTER_IS_EBICYCLE = EBICYCLE_MODEL_INDICATORS.some(indicator => 
-                billModelName.includes(indicator));
-            
-            console.log(`[CRITICAL E-BICYCLE CHECK] Bill #${bill.id}, Model: ${billModelName}, IS E-BICYCLE: ${MASTER_IS_EBICYCLE}`);
-            
-            // ===============================================================
-            // CONTINUE WITH NORMAL PDF GENERATION
-            // ===============================================================
+            // Normal PDF generation (but using our definitive is_ebicycle flag)
             const pdfDoc = await PDFDocument.create()
             const page = pdfDoc.addPage([this.pageWidth, this.pageHeight])
             const { width, height } = page.getSize()
@@ -249,7 +268,7 @@ export class PDFGenerator {
             )
 
             // ===============================================================
-            // PAYMENT DETAILS - SIMPLIFIED LOGIC WITH MASTER OVERRIDE
+            // PAYMENT DETAILS - USING DATABASE IS_EBICYCLE FLAG
             // ===============================================================
             
             // Parse basic numbers
@@ -320,7 +339,7 @@ export class PDFGenerator {
                 );
                 
                 // Only add RMV for non-e-bicycles
-                if (!MASTER_IS_EBICYCLE) {
+                if (!isEbicycle) {
                     tableY = this.drawTableRow(
                         page,
                         this.margin,
@@ -343,8 +362,8 @@ export class PDFGenerator {
             // For CASH bills and default
             else {
                 // CRUCIAL CHECK - Only add RMV for non-e-bicycles
-                if (MASTER_IS_EBICYCLE) {
-                    console.log(`[E-BICYCLE DETECTED] Skipping RMV charge for bill #${bill.id}, model ${billModelName}`);
+                if (isEbicycle) {
+                    console.log(`[E-BICYCLE DETECTED] Skipping RMV charge for bill #${bill.id}, model ${bill.model_name}`);
                     
                     // For e-bicycles, total is just the bike price with NO RMV
                     this.drawTableRow(
@@ -380,7 +399,7 @@ export class PDFGenerator {
             }
             
             // ===============================================================
-            // TERMS AND CONDITIONS - SIMPLIFIED WITH MASTER OVERRIDE
+            // TERMS AND CONDITIONS - BASED ON REAL IS_EBICYCLE FLAG
             // ===============================================================
             
             // Terms and Conditions
@@ -406,7 +425,7 @@ export class PDFGenerator {
                 terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
             } 
             // Only add RMV registration term for non-e-bicycles
-            else if (!MASTER_IS_EBICYCLE) {
+            else if (!isEbicycle) {
                 terms.push('4. RMV registration will be completed within 30 days.');
             }
 
