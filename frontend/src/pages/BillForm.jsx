@@ -124,45 +124,50 @@ export default function BillForm() {
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     
-    // Validate form
-    if (!formData.customer_name) {
-      toast.error('Customer name is required')
-      return
-    }
-    
-    if (!formData.model_name) {
-      toast.error('Bike model is required')
-      return
-    }
-    
-    // Additional validation for advancement bills
-    if (formData.bill_type === 'advancement') {
-      if (!formData.down_payment || formData.down_payment <= 0) {
-        toast.error('Advancement amount is required')
-        return
-      }
-      
-      if (!formData.estimated_delivery_date) {
-        toast.error('Estimated delivery date is required')
-        return
-      }
-    }
-
     try {
-      setSubmitting(true)
+      setLoading(true);
       
-      const response = await api.post('/bills', formData)
+      // Validate fields
+      if (!formData.bill_type) {
+        toast.error('Please select a bill type');
+        return;
+      }
       
-      toast.success('Bill created successfully')
-      navigate(`/bills/${response.data.id}`)
+      // Create a copy of the form data
+      const submitData = { ...formData };
+      
+      // Convert 'advancement' to 'advance' for server submission (DB character limit)
+      if (submitData.bill_type === 'advancement') {
+        submitData.bill_type = 'advance';
+      }
+      
+      // Validate that chassis and motor numbers are provided
+      if (!submitData.chassis_number || !submitData.motor_number) {
+        toast.error('Please provide both chassis and motor numbers');
+        return;
+      }
+      
+      if (isEditMode) {
+        // Handle edit mode
+        await api.put(`/bills/${id}`, submitData);
+        toast.success('Bill updated successfully');
+      } else {
+        // Handle create mode
+        await api.post('/bills', submitData);
+        toast.success('Bill created successfully');
+      }
+      
+      // Navigate back to bills list
+      navigate('/bills');
     } catch (error) {
-      toast.error('Failed to create bill')
-      console.error('Error creating bill:', error)
-      setSubmitting(false)
+      console.error('Error creating bill:', error);
+      toast.error(error.response?.data?.message || 'Failed to save bill');
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   const handlePreviewPDF = async () => {
     try {

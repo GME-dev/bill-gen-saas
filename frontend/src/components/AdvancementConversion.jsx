@@ -65,7 +65,7 @@ export default function AdvancementConversion({ bill, onConversionComplete }) {
     }
   };
 
-  if (!bill || bill.bill_type !== 'advancement' || bill.status !== 'pending') {
+  if (!bill || (bill.bill_type !== 'advancement' && bill.bill_type !== 'advance') || bill.status !== 'pending') {
     return null;
   }
 

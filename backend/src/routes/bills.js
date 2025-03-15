@@ -24,7 +24,7 @@ router.post('/test', async (req, res) => {
     console.log('Creating test bill');
     
     const testBill = {
-      bill_type: 'advancement',
+      bill_type: 'advance',
       customer_name: 'Test Customer',
       customer_nic: '123456789V',
       customer_address: 'Test Address, City',
@@ -129,8 +129,12 @@ router.post('/', async (req, res) => {
     const balance_amount = req.body.balance_amount ? parseFloat(req.body.balance_amount) : 0;
     const estimated_delivery_date = req.body.estimated_delivery_date || null;
     
+    // Handle bill type length constraint - shorten "advancement" to "advance" (10 chars max)
+    const normalized_bill_type = bill_type === 'advancement' ? 'advance' : bill_type;
+    const is_advancement = bill_type === 'advancement' || normalized_bill_type === 'advance';
+    
     // Additional validation for advancement bills
-    if (bill_type === 'advancement') {
+    if (is_advancement) {
       if (down_payment <= 0) {
         return res.status(400).json({ error: 'Down payment is required for advancement bills' });
       }
@@ -143,10 +147,10 @@ router.post('/', async (req, res) => {
     // Insert the bill
     const db = getDatabase();
     const today = new Date().toISOString().split('T')[0];
-    const status = bill_type === 'advancement' ? 'pending' : 'completed';
+    const status = is_advancement ? 'pending' : 'completed';
     
     console.log('Executing query with:', {
-      bill_type, customer_name, customer_nic, customer_address,
+      normalized_bill_type, customer_name, customer_nic, customer_address,
       model_name, motor_number, chassis_number, safe_bike_price,
       down_payment, today, total_amount, balance_amount, 
       estimated_delivery_date, status
@@ -161,7 +165,7 @@ router.post('/', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
-        bill_type, 
+        normalized_bill_type, 
         customer_name, 
         customer_nic, 
         customer_address, 
@@ -213,7 +217,8 @@ router.post('/:id/convert', async (req, res) => {
     const originalBill = originalBillResult.rows[0]
     
     // Check if it's an advancement bill and not already converted
-    if (originalBill.bill_type !== 'advancement' || originalBill.status === 'converted') {
+    // Note: Support both 'advancement' and 'advance' for the bill_type
+    if ((originalBill.bill_type !== 'advance' && originalBill.bill_type !== 'advancement') || originalBill.status === 'converted') {
       return res.status(400).json({ error: 'Only pending advancement bills can be converted' })
     }
     

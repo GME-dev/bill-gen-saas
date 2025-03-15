@@ -197,7 +197,7 @@ export default function BillView() {
               'Pending'}
             </span>
             
-            {bill.status === 'pending' && bill.bill_type !== 'advancement' && (
+            {bill.status === 'pending' && bill.bill_type !== 'advancement' && bill.bill_type !== 'advance' && (
               <button
                 onClick={() => handleStatusChange('completed')}
                 className="px-3 py-1 text-sm font-medium bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
@@ -271,7 +271,7 @@ export default function BillView() {
                 </div>
               )}
 
-              {bill.bill_type === 'advancement' && (
+              {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && (
                 <>
                   <div>
                     <span className="text-gray-600">Advancement Amount:</span>
@@ -313,7 +313,7 @@ export default function BillView() {
         </div>
 
         {/* Advancement Bill Conversion */}
-        {bill.bill_type === 'advancement' && bill.status === 'pending' && (
+        {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && bill.status === 'pending' && (
           <AdvancementConversion bill={bill} onConversionComplete={handleConversionComplete} />
         )}
 

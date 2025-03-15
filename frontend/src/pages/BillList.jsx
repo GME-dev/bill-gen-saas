@@ -103,27 +103,16 @@ const BillList = () => {
   const getBillTypeBadge = (type) => {
     switch (type) {
       case 'cash':
-        return (
-          <span className="bg-green-50 text-green-700 px-2 py-1 rounded-full text-xs">
-            Cash Sale
-          </span>
-        )
+        return <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Cash</span>;
       case 'leasing':
-        return (
-          <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
-            Leasing
-          </span>
-        )
+        return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Leasing</span>;
       case 'advancement':
-        return (
-          <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded-full text-xs">
-            Advancement
-          </span>
-        )
+      case 'advance':
+        return <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Advancement</span>;
       default:
-        return null
+        return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">{type}</span>;
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -205,7 +194,7 @@ const BillList = () => {
                            bill.status === 'converted' ? 'Converted' :
                            'Pending'}
                         </span>
-                        {bill.status === 'pending' && bill.bill_type !== 'advancement' && (
+                        {bill.status === 'pending' && bill.bill_type !== 'advancement' && bill.bill_type !== 'advance' && (
                           <button
                             onClick={() => handleStatusChange(bill.id, 'completed')}
                             className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
