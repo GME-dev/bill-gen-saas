@@ -162,8 +162,8 @@ export class PDFGenerator {
 
             const vehicleDetails = [
                 `Model: ${bill.model_name}`,
-                `Motor Number: ${bill.motor_number}`,
-                `Chassis Number: ${bill.chassis_number}`,
+                `Motor Number: ${bill.motor_number || 'N/A'}`,
+                `Chassis Number: ${bill.chassis_number || 'N/A'}`,
             ]
 
             vehicleDetails.forEach((line, index) => {
@@ -198,14 +198,29 @@ export class PDFGenerator {
                 true
             )
 
-            // Table rows
+            // Ensure all numbers are properly parsed and handle NaN
+            const bikePrice = parseFloat(bill.bike_price) || 0;
+            const downPayment = parseFloat(bill.down_payment) || 0;
+            const totalAmount = parseFloat(bill.total_amount) || bikePrice;
+            // Calculate balance safely - only use when bill type is advance/advancement
+            const balanceAmount = (bill.bill_type === 'advance' || bill.bill_type === 'advancement') ? 
+                (totalAmount - downPayment) : 0;
+
+            // Table rows - always show bike price
             tableY = this.drawTableRow(
                 page,
                 this.margin,
                 tableY,
-                ['Bike Price', `${parseInt(bill.bike_price).toLocaleString()}/=`],
+                ['Bike Price', `${bikePrice.toLocaleString()}/=`],
                 font
             )
+
+            // Check if it's an e-bicycle model
+            const isEbicycle = bill.model_name && (
+                bill.model_name.toLowerCase().includes('cola') ||
+                bill.model_name.toLowerCase().includes('x01') ||
+                bill.model_name.toLowerCase().includes('e-')
+            );
 
             // Different rows based on bill type
             if (bill.bill_type === 'advance' || bill.bill_type === 'advancement') {
@@ -214,7 +229,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Advancement Amount', `${parseInt(bill.down_payment).toLocaleString()}/=`],
+                    ['Advancement Amount', `${downPayment.toLocaleString()}/=`],
                     font
                 )
                 
@@ -222,7 +237,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Balance Amount', `${parseInt(bill.balance_amount).toLocaleString()}/=`],
+                    ['Balance Amount', `${balanceAmount.toLocaleString()}/=`],
                     font
                 )
                 
@@ -241,7 +256,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Total Amount', `${parseInt(bill.total_amount).toLocaleString()}/=`],
+                    ['Total Amount', `${totalAmount.toLocaleString()}/=`],
                     boldFont,
                     12,
                     true
@@ -252,53 +267,69 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Down Payment', `${parseInt(bill.down_payment).toLocaleString()}/=`],
+                    ['Down Payment', `${downPayment.toLocaleString()}/=`],
                     font
                 )
                 
-                // RMV section for leasing
-                tableY = this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    ['RMV Charge', 'CPZ'],
-                    font
-                )
+                // Only add RMV charges for non-e-bicycles
+                if (!isEbicycle) {
+                    tableY = this.drawTableRow(
+                        page,
+                        this.margin,
+                        tableY,
+                        ['RMV Charge', 'CPZ'],
+                        font
+                    )
+                }
                 
                 // Total row with (D/P) for leasing
                 this.drawTableRow(
                     page,
                     this.margin,
                     tableY,
-                    ['Total Amount', `${parseInt(bill.down_payment).toLocaleString()}/= (D/P)`],
+                    ['Total Amount', `${downPayment.toLocaleString()}/= (D/P)`],
                     boldFont,
                     12,
                     true
                 )
             } else {
                 // Cash bill type
-                // RMV section for cash
-                tableY = this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    ['RMV Charge', '13,000/='],
-                    font
-                )
                 
-                // Calculate total amount for cash
-                const totalAmount = parseInt(bill.bike_price) + 13000;
-                
-                // Total row for cash
-                this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    ['Total Amount', `${totalAmount.toLocaleString()}/=`],
-                    boldFont,
-                    12,
-                    true
-                )
+                // Only add RMV charges for non-e-bicycles
+                if (!isEbicycle) {
+                    tableY = this.drawTableRow(
+                        page,
+                        this.margin,
+                        tableY,
+                        ['RMV Charge', '13,000/='],
+                        font
+                    )
+                    
+                    // Calculate total amount for cash with RMV
+                    const cashTotalAmount = bikePrice + 13000;
+                    
+                    // Total row for cash with RMV
+                    this.drawTableRow(
+                        page,
+                        this.margin,
+                        tableY,
+                        ['Total Amount', `${cashTotalAmount.toLocaleString()}/=`],
+                        boldFont,
+                        12,
+                        true
+                    )
+                } else {
+                    // For e-bicycles, no RMV charge
+                    this.drawTableRow(
+                        page,
+                        this.margin,
+                        tableY,
+                        ['Total Amount', `${bikePrice.toLocaleString()}/=`],
+                        boldFont,
+                        12,
+                        true
+                    )
+                }
             }
 
             // Terms and Conditions
@@ -323,7 +354,10 @@ export class PDFGenerator {
                 terms.push('4. Balance amount must be paid upon delivery of the vehicle.');
                 terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
             } else {
-                terms.push('4. RMV registration will be completed within 30 days.');
+                // Only add RMV note for non-e-bicycles
+                if (!isEbicycle) {
+                    terms.push('4. RMV registration will be completed within 30 days.');
+                }
             }
 
             terms.forEach((line, index) => {

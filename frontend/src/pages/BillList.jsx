@@ -180,12 +180,12 @@ const BillList = () => {
                       {bill.model_name}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rs. {parseInt(bill.total_amount).toLocaleString()}
+                      Rs. {(parseFloat(bill.total_amount) || 0).toLocaleString()}
                       {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && (
                         <div className="text-xs text-gray-500">
-                          Adv: Rs. {parseInt(bill.down_payment).toLocaleString()}
+                          Adv: Rs. {(parseFloat(bill.down_payment) || 0).toLocaleString()}
                           <br/>
-                          Due: Rs. {parseInt(bill.balance_amount).toLocaleString()}
+                          Due: Rs. {((parseFloat(bill.total_amount) || 0) - (parseFloat(bill.down_payment) || 0)).toLocaleString()}
                         </div>
                       )}
                     </td>

@@ -275,11 +275,13 @@ export default function BillView() {
                 <>
                   <div>
                     <span className="text-gray-600">Advancement Amount:</span>
-                    <span className="ml-2 font-medium">Rs. {parseInt(bill.down_payment).toLocaleString()}</span>
+                    <span className="ml-2 font-medium">Rs. {(parseFloat(bill.down_payment) || 0).toLocaleString()}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Balance Due:</span>
-                    <span className="ml-2 font-medium">Rs. {parseInt(bill.balance_amount).toLocaleString()}</span>
+                    <span className="ml-2 font-medium">Rs. {
+                      ((parseFloat(bill.total_amount) || 0) - (parseFloat(bill.down_payment) || 0)).toLocaleString()
+                    }</span>
                   </div>
                   {bill.estimated_delivery_date && (
                     <div>
@@ -294,7 +296,7 @@ export default function BillView() {
             <div className="space-y-2">
               <div className="text-lg">
                 <span className="text-gray-800 font-medium">Total Amount:</span>
-                <span className="ml-2 font-bold">Rs. {parseInt(bill.total_amount).toLocaleString()}</span>
+                <span className="ml-2 font-bold">Rs. {(parseFloat(bill.total_amount) || 0).toLocaleString()}</span>
               </div>
               
               {bill.original_bill_id && (

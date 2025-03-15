@@ -126,12 +126,17 @@ router.post('/', async (req, res) => {
     const down_payment = req.body.down_payment ? parseFloat(req.body.down_payment) : 0;
     const safe_bike_price = parseFloat(bike_price) || 0;
     const total_amount = req.body.total_amount ? parseFloat(req.body.total_amount) : safe_bike_price;
-    const balance_amount = req.body.balance_amount ? parseFloat(req.body.balance_amount) : 0;
     const estimated_delivery_date = req.body.estimated_delivery_date || null;
     
     // Handle bill type length constraint - shorten "advancement" to "advance" (10 chars max)
     const normalized_bill_type = bill_type === 'advancement' ? 'advance' : bill_type;
     const is_advancement = bill_type === 'advancement' || normalized_bill_type === 'advance';
+    
+    // Calculate balance amount correctly for advancement bills
+    let balance_amount = 0;
+    if (is_advancement) {
+      balance_amount = total_amount - down_payment;
+    }
     
     // Additional validation for advancement bills
     if (is_advancement) {
