@@ -39,46 +39,59 @@ router.get('/:id', async (req, res) => {
 // Create a new bill
 router.post('/', async (req, res) => {
   try {
-    // Log request body for debugging
-    console.log('Creating bill with data:', JSON.stringify(req.body, null, 2))
+    // Log the incoming request for debugging
+    console.log('Creating bill with data:', JSON.stringify(req.body, null, 2));
     
+    // Extract fields with default values where appropriate
     const {
-      bill_type,
-      customer_name,
-      customer_nic,
-      customer_address,
-      model_name,
-      motor_number,
-      chassis_number,
-      bike_price,
-      down_payment,
-      total_amount,
-      balance_amount,
-      estimated_delivery_date
-    } = req.body
+      bill_type = '',
+      customer_name = '',
+      customer_nic = '',
+      customer_address = '',
+      model_name = '',
+      motor_number = '',
+      chassis_number = '',
+      bike_price = 0,
+      down_payment = 0,
+      total_amount = 0,
+      balance_amount = 0,
+      estimated_delivery_date = null
+    } = req.body;
 
-    // Validate required fields
-    if (!bill_type || !customer_name || !customer_nic || !customer_address || !model_name || !motor_number || !chassis_number || !bike_price) {
-      console.log('Missing required fields')
-      return res.status(400).json({ error: 'Missing required fields' })
+    // Basic validation
+    if (!bill_type || !customer_name || !customer_nic || !customer_address || 
+        !model_name || !motor_number || !chassis_number) {
+      console.log('Missing required fields');
+      return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Additional validation for advancement bills
+    // Format numeric values safely
+    const safeBikePrice = parseFloat(bike_price) || 0;
+    const safeDownPayment = parseFloat(down_payment) || 0;
+    const safeTotalAmount = parseFloat(total_amount) || safeBikePrice;
+    const safeBalanceAmount = parseFloat(balance_amount) || 0;
+
+    // For advancement bills, ensure we have the required fields
     if (bill_type === 'advancement') {
-      if (!down_payment || isNaN(parseFloat(down_payment)) || parseFloat(down_payment) <= 0) {
-        console.log('Invalid down payment for advancement bill:', down_payment)
-        return res.status(400).json({ error: 'Down payment is required for advancement bills' })
+      if (safeDownPayment <= 0) {
+        console.log('Down payment required for advancement bills');
+        return res.status(400).json({ error: 'Down payment is required for advancement bills' });
       }
+      
       if (!estimated_delivery_date) {
-        console.log('Missing estimated delivery date for advancement bill')
-        return res.status(400).json({ error: 'Estimated delivery date is required for advancement bills' })
+        console.log('Estimated delivery date required for advancement bills');
+        return res.status(400).json({ error: 'Estimated delivery date is required for advancement bills' });
       }
     }
 
-    const db = getDatabase()
-    const today = new Date().toISOString().split('T')[0]
+    const db = getDatabase();
+    const today = new Date().toISOString().split('T')[0];
     
-    console.log('Preparing to insert bill:', {
+    // Set status based on bill type
+    const status = bill_type === 'advancement' ? 'pending' : 'completed';
+    
+    // Prepare the query with simpler parameters
+    console.log('Preparing to execute query with values:', {
       bill_type,
       customer_name,
       customer_nic,
@@ -86,15 +99,16 @@ router.post('/', async (req, res) => {
       model_name,
       motor_number,
       chassis_number,
-      bike_price,
-      down_payment: down_payment || null,
+      safeBikePrice,
+      safeDownPayment,
       today,
-      total_amount: total_amount || bike_price,
-      balance_amount: balance_amount || null,
-      estimated_delivery_date: estimated_delivery_date || null,
-      status: bill_type === 'advancement' ? 'pending' : 'completed'
-    })
-    
+      safeTotalAmount,
+      safeBalanceAmount,
+      estimated_delivery_date,
+      status
+    });
+
+    // Execute insert query
     const result = await db.query(
       `INSERT INTO bills 
       (bill_type, customer_name, customer_nic, customer_address, 
@@ -111,24 +125,28 @@ router.post('/', async (req, res) => {
         model_name, 
         motor_number, 
         chassis_number, 
-        parseFloat(bike_price), 
-        down_payment ? parseFloat(down_payment) : null, 
+        safeBikePrice, 
+        safeDownPayment, 
         today,
-        total_amount ? parseFloat(total_amount) : parseFloat(bike_price),
-        balance_amount ? parseFloat(balance_amount) : null,
-        estimated_delivery_date || null,
-        bill_type === 'advancement' ? 'pending' : 'completed'
+        safeTotalAmount,
+        safeBalanceAmount,
+        estimated_delivery_date,
+        status
       ]
-    )
+    );
 
-    console.log('Bill created successfully:', result.rows[0])
-    res.status(201).json(result.rows[0])
+    console.log('Bill created successfully:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error('Error creating bill:', error.message)
-    console.error('Stack trace:', error.stack)
-    res.status(500).json({ error: 'Internal server error', details: error.message })
+    console.error('Error creating bill:', error.message);
+    console.error('Stack trace:', error.stack);
+    res.status(500).json({ 
+      error: 'Internal server error', 
+      details: error.message,
+      stack: error.stack 
+    });
   }
-})
+});
 
 // Convert advancement bill to final bill
 router.post('/:id/convert', async (req, res) => {

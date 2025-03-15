@@ -208,10 +208,10 @@ const BillList = () => {
                         {bill.status === 'pending' && bill.bill_type !== 'advancement' && (
                           <button
                             onClick={() => handleStatusChange(bill.id, 'completed')}
-                            className="text-xs text-green-600 hover:text-green-900"
+                            className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
                             title="Mark as completed"
                           >
-                            ✓
+                            Mark Complete
                           </button>
                         )}
                       </div>

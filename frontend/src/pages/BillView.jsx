@@ -98,14 +98,16 @@ export default function BillView() {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await api.patch(`/bills/${id}`, { status: newStatus })
-      fetchBill()
-      toast.success(`Bill status updated to ${newStatus}`)
+      console.log(`Updating bill ${id} status to ${newStatus}`);
+      const response = await api.patch(`/bills/${id}`, { status: newStatus });
+      console.log('Status update response:', response.data);
+      fetchBill();
+      toast.success(`Bill status updated to ${newStatus}`);
     } catch (error) {
-      console.error('Error updating status:', error)
-      toast.error('Failed to update status');
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status: ' + error.message);
     }
-  }
+  };
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
@@ -198,8 +200,9 @@ export default function BillView() {
             {bill.status === 'pending' && bill.bill_type !== 'advancement' && (
               <button
                 onClick={() => handleStatusChange('completed')}
-                className="px-3 py-1 text-sm font-medium bg-green-500 text-white rounded-md hover:bg-green-600"
+                className="px-3 py-1 text-sm font-medium bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
               >
+                <span className="mr-1">✓</span>
                 Mark as Completed
               </button>
             )}
