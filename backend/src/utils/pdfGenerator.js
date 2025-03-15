@@ -207,16 +207,47 @@ export class PDFGenerator {
                 font
             )
 
-            // RMV section
-            tableY = this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['RMV Charge', bill.bill_type === 'cash' ? '13,000/=' : 'CPZ'],
-                font
-            )
-
-            if (bill.bill_type === 'leasing') {
+            // Different rows based on bill type
+            if (bill.bill_type === 'advance' || bill.bill_type === 'advancement') {
+                // Advancement bill type
+                tableY = this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Advancement Amount', `${parseInt(bill.down_payment).toLocaleString()}/=`],
+                    font
+                )
+                
+                tableY = this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Balance Amount', `${parseInt(bill.balance_amount).toLocaleString()}/=`],
+                    font
+                )
+                
+                if (bill.estimated_delivery_date) {
+                    tableY = this.drawTableRow(
+                        page,
+                        this.margin,
+                        tableY,
+                        ['Estimated Delivery Date', new Date(bill.estimated_delivery_date).toLocaleDateString()],
+                        font
+                    )
+                }
+                
+                // Total row shows total price
+                this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Total Amount', `${parseInt(bill.total_amount).toLocaleString()}/=`],
+                    boldFont,
+                    12,
+                    true
+                )
+            } else if (bill.bill_type === 'leasing') {
+                // Leasing bill type
                 tableY = this.drawTableRow(
                     page,
                     this.margin,
@@ -224,25 +255,51 @@ export class PDFGenerator {
                     ['Down Payment', `${parseInt(bill.down_payment).toLocaleString()}/=`],
                     font
                 )
+                
+                // RMV section for leasing
+                tableY = this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['RMV Charge', 'CPZ'],
+                    font
+                )
+                
+                // Total row with (D/P) for leasing
+                this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Total Amount', `${parseInt(bill.down_payment).toLocaleString()}/= (D/P)`],
+                    boldFont,
+                    12,
+                    true
+                )
+            } else {
+                // Cash bill type
+                // RMV section for cash
+                tableY = this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['RMV Charge', '13,000/='],
+                    font
+                )
+                
+                // Calculate total amount for cash
+                const totalAmount = parseInt(bill.bike_price) + 13000;
+                
+                // Total row for cash
+                this.drawTableRow(
+                    page,
+                    this.margin,
+                    tableY,
+                    ['Total Amount', `${totalAmount.toLocaleString()}/=`],
+                    boldFont,
+                    12,
+                    true
+                )
             }
-
-            // Calculate total amount
-            const totalAmount = bill.bill_type === 'leasing' 
-                ? parseInt(bill.down_payment)
-                : parseInt(bill.bike_price) + 13000;
-
-            // Total row with (D/P) for leasing
-            this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['Total Amount', bill.bill_type === 'leasing' ? 
-                    `${parseInt(bill.down_payment).toLocaleString()}/= (D/P)` : 
-                    `${totalAmount.toLocaleString()}/=`],
-                boldFont,
-                12,
-                true
-            )
 
             // Terms and Conditions
             const termsY = tableY - 80
@@ -257,10 +314,17 @@ export class PDFGenerator {
                 '1. All prices are inclusive of taxes.',
                 '2. Warranty is subject to terms and conditions.',
                 '3. This is a computer-generated bill.',
-                bill.bill_type === 'leasing' ? 
-                    '4. Balance amount will be settled by the leasing company.' :
-                    '4. RMV registration will be completed within 30 days.'
             ]
+            
+            // Add special condition based on bill type
+            if (bill.bill_type === 'leasing') {
+                terms.push('4. Balance amount will be settled by the leasing company.');
+            } else if (bill.bill_type === 'advance' || bill.bill_type === 'advancement') {
+                terms.push('4. Balance amount must be paid upon delivery of the vehicle.');
+                terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
+            } else {
+                terms.push('4. RMV registration will be completed within 30 days.');
+            }
 
             terms.forEach((line, index) => {
                 page.drawText(line, {

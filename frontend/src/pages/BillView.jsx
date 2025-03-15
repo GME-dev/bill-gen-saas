@@ -314,7 +314,24 @@ export default function BillView() {
 
         {/* Advancement Bill Conversion */}
         {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && bill.status === 'pending' && (
-          <AdvancementConversion bill={bill} onConversionComplete={handleConversionComplete} />
+          <div className="mt-6 p-4 border-t border-gray-200">
+            <h3 className="text-lg font-semibold mb-4">Advancement Bill Actions</h3>
+            <div className="flex flex-wrap gap-4">
+              <AdvancementConversion bill={bill} onConversionComplete={handleConversionComplete} />
+              
+              <button
+                onClick={() => handleStatusChange('completed')}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center"
+              >
+                <span className="mr-1">✓</span>
+                Mark as Completed
+              </button>
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Note: Convert to final bill if the customer is converting this to a cash or leasing purchase.
+              Mark as completed if the advancement was refunded or the deal was completed without a conversion.
+            </p>
+          </div>
         )}
 
         {/* Bill Actions */}

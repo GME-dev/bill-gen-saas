@@ -108,7 +108,7 @@ const BillList = () => {
         return <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Leasing</span>;
       case 'advancement':
       case 'advance':
-        return <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Advancement</span>;
+        return <span className="px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800 font-bold">Advancement</span>;
       default:
         return <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">{type}</span>;
     }
@@ -181,9 +181,11 @@ const BillList = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       Rs. {parseInt(bill.total_amount).toLocaleString()}
-                      {bill.bill_type === 'advancement' && (
+                      {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && (
                         <div className="text-xs text-gray-500">
                           Adv: Rs. {parseInt(bill.down_payment).toLocaleString()}
+                          <br/>
+                          Due: Rs. {parseInt(bill.balance_amount).toLocaleString()}
                         </div>
                       )}
                     </td>
@@ -194,14 +196,26 @@ const BillList = () => {
                            bill.status === 'converted' ? 'Converted' :
                            'Pending'}
                         </span>
-                        {bill.status === 'pending' && bill.bill_type !== 'advancement' && bill.bill_type !== 'advance' && (
-                          <button
-                            onClick={() => handleStatusChange(bill.id, 'completed')}
-                            className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
-                            title="Mark as completed"
-                          >
-                            Mark Complete
-                          </button>
+                        {bill.status === 'pending' && (
+                          <>
+                            {bill.bill_type !== 'advancement' && bill.bill_type !== 'advance' ? (
+                              <button
+                                onClick={() => handleStatusChange(bill.id, 'completed')}
+                                className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
+                                title="Mark as completed"
+                              >
+                                Mark Complete
+                              </button>
+                            ) : (
+                              <a
+                                href={`/bills/${bill.id}`}
+                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                title="View bill to convert or complete"
+                              >
+                                View Actions
+                              </a>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
