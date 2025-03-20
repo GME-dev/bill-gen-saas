@@ -92,7 +92,6 @@ export async function initializeDatabase() {
             down_payment DECIMAL(10,2),
             bill_date DATE NOT NULL,
             total_amount DECIMAL(10,2) NOT NULL,
-            balance_amount DECIMAL(10,2),
             status TEXT DEFAULT 'pending',
             original_bill_id INTEGER REFERENCES bills(id),
             converted_bill_id INTEGER REFERENCES bills(id),
@@ -125,6 +124,25 @@ export async function initializeDatabase() {
               ALTER TABLE bills 
               ADD COLUMN advance_amount DECIMAL(10,2);
             END IF;
+
+            -- Add balance_amount column if it doesn't exist
+            IF NOT EXISTS (
+              SELECT 1 
+              FROM information_schema.columns 
+              WHERE table_name = 'bills' AND column_name = 'balance_amount'
+            ) THEN
+              ALTER TABLE bills 
+              ADD COLUMN balance_amount DECIMAL(10,2);
+            END IF;
+
+            -- Update balance_amount for existing records
+            UPDATE bills b
+            SET balance_amount = CASE
+              WHEN b.bill_type = 'CASH' THEN b.total_amount - COALESCE(b.advance_amount, 0)
+              WHEN b.bill_type = 'LEASE' THEN b.down_payment - COALESCE(b.advance_amount, 0)
+              ELSE b.balance_amount
+            END
+            WHERE b.balance_amount IS NULL;
           END $$;
         `)
         
