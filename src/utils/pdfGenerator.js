@@ -175,17 +175,55 @@ export class PDFGenerator {
                 })
             })
 
-            // Payment Information
-            const paymentY = vehicleY - 120
-            page.drawText('Payment Details:', {
-                x: this.margin,
-                y: paymentY,
-                size: 14,
-                font: boldFont,
-            })
+            // Bill Type Header
+            const billTypeText = {
+                'CASH': 'CASH BILL',
+                'LEASE': 'LEASE BILL',
+                'ADVANCE_CASH': 'ADVANCE PAYMENT (CASH)',
+                'ADVANCE_LEASE': 'ADVANCE PAYMENT (LEASE)'
+            }[bill.bill_type];
+
+            page.drawText(billTypeText, {
+                x: width / 2 - font.widthOfTextAtSize(billTypeText, 16) / 2,
+                y: height - this.margin - 40,
+                size: 16,
+                font: boldFont
+            });
+
+            // Price Details Section
+            const priceRows = [];
+            
+            // Add bike price for all types
+            priceRows.push(['Bike Price', `${parseInt(bill.bike_price).toLocaleString()}/=`]);
+            
+            // Add RMV charge based on type and model
+            if (!bill.is_ebicycle) {
+                priceRows.push(['RMV Charge', bill.bill_type.includes('LEASE') ? 'CPZ' : '13,000/=']);
+            }
+            
+            // Handle down payment for lease types
+            if (bill.bill_type.includes('LEASE')) {
+                priceRows.push(['Down Payment', `${parseInt(bill.down_payment).toLocaleString()}/=`]);
+            }
+            
+            // Handle advance payment if present
+            if (bill.advance_amount) {
+                priceRows.push(['Advance Payment', `${parseInt(bill.advance_amount).toLocaleString()}/=`]);
+            }
+            
+            // Calculate and show total amount
+            const totalText = bill.bill_type.includes('LEASE') ? 
+                `${parseInt(bill.down_payment).toLocaleString()}/= (Down Payment)` :
+                `${parseInt(bill.total_amount).toLocaleString()}/=`;
+            priceRows.push(['Total Amount', totalText]);
+            
+            // Show balance for advance payments
+            if (bill.balance_amount) {
+                priceRows.push(['Balance to Pay', `${parseInt(bill.balance_amount).toLocaleString()}/=`]);
+            }
 
             // Draw payment details table
-            let tableY = paymentY - 30
+            let tableY = vehicleY - 30
             
             // Table header
             tableY = this.drawTableRow(
@@ -199,50 +237,15 @@ export class PDFGenerator {
             )
 
             // Table rows
-            tableY = this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['Bike Price', `${parseInt(bill.bike_price).toLocaleString()}/=`],
-                font
-            )
-
-            // RMV section
-            tableY = this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['RMV Charge', bill.bill_type === 'cash' ? '13,000/=' : 'CPZ'],
-                font
-            )
-
-            if (bill.bill_type === 'leasing') {
+            priceRows.forEach((row, index) => {
                 tableY = this.drawTableRow(
                     page,
                     this.margin,
                     tableY,
-                    ['Down Payment', `${parseInt(bill.down_payment).toLocaleString()}/=`],
+                    row,
                     font
                 )
-            }
-
-            // Calculate total amount
-            const totalAmount = bill.bill_type === 'leasing' 
-                ? parseInt(bill.down_payment)
-                : parseInt(bill.bike_price) + 13000;
-
-            // Total row with (D/P) for leasing
-            this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['Total Amount', bill.bill_type === 'leasing' ? 
-                    `${parseInt(bill.down_payment).toLocaleString()}/= (D/P)` : 
-                    `${totalAmount.toLocaleString()}/=`],
-                boldFont,
-                12,
-                true
-            )
+            })
 
             // Terms and Conditions
             const termsY = tableY - 80
@@ -253,16 +256,28 @@ export class PDFGenerator {
                 font: boldFont,
             })
 
-            const terms = [
-                '1. All prices are inclusive of taxes.',
-                '2. Warranty is subject to terms and conditions.',
+            // Add appropriate footer notes
+            const footerNotes = [
+                '1. All prices are in Sri Lankan Rupees.',
+                '2. This bill is valid for 30 days.',
                 '3. This is a computer-generated bill.',
-                bill.bill_type === 'leasing' ? 
-                    '4. Balance amount will be settled by the leasing company.' :
-                    '4. RMV registration will be completed within 30 days.'
-            ]
+            ];
 
-            terms.forEach((line, index) => {
+            if (bill.bill_type.includes('ADVANCE')) {
+                footerNotes.push(
+                    '4. This is an advance payment receipt.',
+                    bill.bill_type === 'ADVANCE_LEASE' ?
+                        '5. Final lease agreement will be prepared upon full down payment.' :
+                        '5. Final bill will be issued upon full payment.'
+                );
+            } else if (bill.bill_type === 'LEASE') {
+                footerNotes.push(
+                    '4. CPZ indicates RMV charges are capitalized.',
+                    '5. Please refer to the lease agreement for full terms.'
+                );
+            }
+
+            footerNotes.forEach((line, index) => {
                 page.drawText(line, {
                     x: this.margin,
                     y: termsY - 20 - (index * 15),

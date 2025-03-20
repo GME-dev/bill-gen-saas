@@ -15,8 +15,12 @@ A web application for generating and managing electric scooter bills, supporting
 
 - **Frontend**: React.js with Vite, TailwindCSS
 - **Backend**: Node.js, Express.js
-- **Database**: SQLite
+- **Database**: PostgreSQL (Supabase)
 - **PDF Generation**: pdf-lib
+- **Hosting**: 
+  - Frontend: Cloudflare Pages
+  - Backend: Railway
+  - Database: Supabase
 
 ## Getting Started
 
