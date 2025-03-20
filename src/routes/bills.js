@@ -160,7 +160,7 @@ router.get('/preview', async (req, res) => {
     // Create a sample bill for preview
     const sampleBill = {
       id: 'PREVIEW',
-      bill_type: 'cash',
+      bill_type: 'CASH',
       customer_name: 'John Doe',
       customer_nic: '123456789V',
       customer_address: '123 Sample Street, City',
@@ -168,9 +168,12 @@ router.get('/preview', async (req, res) => {
       motor_number: 'MT123456',
       chassis_number: 'CH789012',
       bike_price: 499500.00,
+      rmv_charge: 13000,
       down_payment: 0,
       total_amount: 514500.00,
-      bill_date: new Date().toISOString()
+      bill_date: new Date().toISOString(),
+      is_ebicycle: false,
+      can_be_leased: true
     }
     
     const pdfBytes = await pdfGenerator.generateBill(sampleBill)
@@ -193,9 +196,23 @@ router.get('/preview/pdf', async (req, res) => {
     }
 
     const parsedFormData = JSON.parse(formData);
+    // Ensure bill_type is uppercase and matches our enum
+    const billType = parsedFormData.bill_type?.toUpperCase() || 'CASH';
+    
+    // Get bike model info for proper RMV charge calculation
+    const db = getDatabase();
+    const modelResult = await db.query(
+      'SELECT is_ebicycle, can_be_leased FROM bike_models WHERE name = $1',
+      [parsedFormData.model_name]
+    );
+    const bikeModel = modelResult.rows[0] || { is_ebicycle: false, can_be_leased: true };
+
     const bill = {
       id: 'PREVIEW',
       ...parsedFormData,
+      bill_type: billType,
+      is_ebicycle: bikeModel.is_ebicycle,
+      can_be_leased: bikeModel.can_be_leased,
       bill_date: new Date().toISOString()
     };
 
