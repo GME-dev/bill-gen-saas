@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../config/api'
+import { Table, Tag, Button, Space } from 'antd'
+import { supabase } from '../config/supabaseClient'
 
 const BillList = () => {
   const navigate = useNavigate()
@@ -14,8 +16,14 @@ const BillList = () => {
 
   const fetchBills = async () => {
     try {
-      const response = await api.get('/bills')
-      setBills(response.data)
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('bill_summaries')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+      setBills(data)
     } catch (error) {
       console.error('Error fetching bills:', error)
       toast.error('Failed to load bills')
@@ -114,6 +122,90 @@ const BillList = () => {
     }
   };
 
+  const getBillTypeTag = (record) => {
+    if (record.is_advance_payment) {
+      return <Tag color="orange">{`Advance ${record.bill_type}`}</Tag>;
+    }
+    return <Tag color={record.bill_type === 'cash' ? 'green' : 'blue'}>
+      {record.bill_type.toUpperCase()}
+    </Tag>;
+  };
+
+  const columns = [
+    {
+      title: 'Bill Number',
+      dataIndex: 'bill_number',
+      key: 'bill_number',
+    },
+    {
+      title: 'Customer',
+      dataIndex: 'customer_name',
+      key: 'customer_name',
+    },
+    {
+      title: 'Model',
+      dataIndex: 'model_name',
+      key: 'model_name',
+      render: (text, record) => (
+        <Space>
+          {text}
+          {record.is_ebicycle && <Tag color="purple">E-Bicycle</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: 'Type',
+      key: 'type',
+      render: (_, record) => getBillTypeTag(record),
+    },
+    {
+      title: 'Amount',
+      key: 'amount',
+      render: (_, record) => {
+        if (record.bill_type === 'leasing') {
+          return `Rs. ${record.down_payment?.toLocaleString()}`;
+        }
+        return `Rs. ${record.total_amount?.toLocaleString()}`;
+      },
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status) => (
+        <Tag color={
+          status === 'pending' ? 'orange' :
+          status === 'completed' ? 'green' :
+          status === 'converted' ? 'blue' : 'default'
+        }>
+          {status.toUpperCase()}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Date',
+      dataIndex: 'bill_date',
+      key: 'bill_date',
+      render: (date) => new Date(date).toLocaleDateString(),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record) => (
+        <Space>
+          <Button type="primary" onClick={() => navigate(`/bills/${record.id}`)}>
+            View
+          </Button>
+          {record.is_advance_payment && record.status === 'pending' && (
+            <Button onClick={() => navigate(`/bills/${record.id}/convert`)}>
+              Convert
+            </Button>
+          )}
+        </Space>
+      ),
+    },
+  ];
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -123,137 +215,20 @@ const BillList = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Bills</h1>
-        <button
-          onClick={() => navigate('/bills/new')}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-        >
-          Create New Bill
-        </button>
+    <div className="p-6">
+      <div className="flex justify-between mb-6">
+        <h1 className="text-2xl font-semibold">Bills</h1>
+        <Button type="primary" onClick={() => navigate('/bills/new')}>
+          Generate New Bill
+        </Button>
       </div>
-
-      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill No</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {bills.length === 0 ? (
-                <tr>
-                  <td colSpan="8" className="px-6 py-4 text-center text-gray-500">
-                    No bills found. Create your first bill!
-                  </td>
-                </tr>
-              ) : (
-                bills.map((bill) => (
-                  <tr key={bill.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      <a 
-                        href={`/bills/${bill.id}`} 
-                        className="text-blue-600 hover:text-blue-900 hover:underline"
-                      >
-                        #{bill.id}
-                      </a>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(bill.bill_date)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {getBillTypeBadge(bill.bill_type)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {bill.customer_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {bill.model_name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      Rs. {(parseFloat(bill.total_amount) || 0).toLocaleString()}
-                      {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && (
-                        <div className="text-xs text-gray-500">
-                          Adv: Rs. {(parseFloat(bill.down_payment) || 0).toLocaleString()}
-                          <br/>
-                          Due: Rs. {((parseFloat(bill.total_amount) || 0) - (parseFloat(bill.down_payment) || 0)).toLocaleString()}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(bill.status)}`}>
-                          {bill.status === 'completed' ? 'Completed' :
-                           bill.status === 'converted' ? 'Converted' :
-                           'Pending'}
-                        </span>
-                        {bill.status === 'pending' && (
-                          <>
-                            {bill.bill_type !== 'advancement' && bill.bill_type !== 'advance' ? (
-                              <button
-                                onClick={() => handleStatusChange(bill.id, 'completed')}
-                                className="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
-                                title="Mark as completed"
-                              >
-                                Mark Complete
-                              </button>
-                            ) : (
-                              <a
-                                href={`/bills/${bill.id}`}
-                                className="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-                                title="View bill to convert or complete"
-                              >
-                                View Actions
-                              </a>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <a
-                        href={`/bills/${bill.id}`}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        View
-                      </a>
-                      <button
-                        onClick={() => handleDownloadPDF(bill.id, true)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        Preview
-                      </button>
-                      <button
-                        onClick={() => handleDownloadPDF(bill.id)}
-                        className="text-green-600 hover:text-green-900"
-                      >
-                        Download
-                      </button>
-                      {bill.status !== 'converted' && (
-                        <button
-                          onClick={() => handleDelete(bill.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      
+      <Table
+        columns={columns}
+        dataSource={bills}
+        rowKey="id"
+        loading={loading}
+      />
     </div>
   )
 }

@@ -1,6 +1,9 @@
 -- Start transaction
 BEGIN;
 
+-- Enable necessary extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Create bill_type ENUM if it doesn't exist
 DO $$ 
 BEGIN 
@@ -13,107 +16,116 @@ END $$;
 -- DROP TABLE IF EXISTS bills CASCADE;
 -- DROP TABLE IF EXISTS bike_models CASCADE;
 
--- Create or update bike_models table
+-- Create bike_models table
 CREATE TABLE IF NOT EXISTS bike_models (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    model_name TEXT NOT NULL UNIQUE,
     price DECIMAL(10,2) NOT NULL,
     motor_number_prefix TEXT,
     chassis_number_prefix TEXT,
     is_ebicycle BOOLEAN DEFAULT FALSE,
-    can_be_leased BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create or update bills table with all constraints
+-- Create bills table
 CREATE TABLE IF NOT EXISTS bills (
-    id SERIAL PRIMARY KEY,
-    bill_type bill_type NOT NULL,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    bill_number TEXT UNIQUE NOT NULL,
+    bill_type TEXT NOT NULL CHECK (bill_type IN ('cash', 'leasing')),
     customer_name TEXT NOT NULL,
     customer_nic TEXT NOT NULL,
     customer_address TEXT NOT NULL,
-    model_name TEXT NOT NULL,
+    model_name TEXT NOT NULL REFERENCES bike_models(model_name),
     motor_number TEXT NOT NULL,
     chassis_number TEXT NOT NULL,
     bike_price DECIMAL(10,2) NOT NULL,
-    rmv_charge DECIMAL(10,2) NOT NULL,
+    rmv_charge DECIMAL(10,2),
+    is_cpz BOOLEAN DEFAULT FALSE,
     down_payment DECIMAL(10,2),
+    is_advance_payment BOOLEAN DEFAULT FALSE,
     advance_amount DECIMAL(10,2),
-    bill_date DATE NOT NULL,
     total_amount DECIMAL(10,2) NOT NULL,
     balance_amount DECIMAL(10,2),
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'converted')),
-    original_bill_id INTEGER REFERENCES bills(id),
-    converted_bill_id INTEGER REFERENCES bills(id),
+    original_bill_id UUID REFERENCES bills(id),
+    bill_date DATE NOT NULL DEFAULT CURRENT_DATE,
     estimated_delivery_date DATE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (model_name) REFERENCES bike_models(name),
-    -- Ensure e-bicycles can't have lease bills
-    CONSTRAINT valid_lease_bill CHECK (
-        (bill_type NOT IN ('LEASE', 'ADVANCE_LEASE')) OR 
-        (SELECT can_be_leased FROM bike_models WHERE name = model_name)
-    ),
-    -- Ensure RMV charges are correct based on bill type
-    CONSTRAINT valid_rmv_charge CHECK (
-        (rmv_charge = 0 AND (SELECT is_ebicycle FROM bike_models WHERE name = model_name)) OR
-        (rmv_charge = 13000 AND bill_type = 'CASH') OR
-        (rmv_charge = 13500 AND bill_type = 'LEASE') OR
-        (rmv_charge = 13000 AND bill_type = 'ADVANCE_CASH') OR
-        (rmv_charge = 13500 AND bill_type = 'ADVANCE_LEASE')
-    ),
-    -- Ensure balance calculation is correct
-    CONSTRAINT valid_balance CHECK (
-        (bill_type = 'CASH' AND balance_amount = total_amount - COALESCE(advance_amount, 0)) OR
-        (bill_type = 'LEASE' AND balance_amount = down_payment - COALESCE(advance_amount, 0)) OR
-        (bill_type IN ('ADVANCE_CASH', 'ADVANCE_LEASE') AND balance_amount IS NOT NULL) OR
-        (bill_type IN ('CASH', 'LEASE') AND advance_amount IS NULL)
-    )
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Create function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create triggers for updated_at
+CREATE TRIGGER update_bills_updated_at
+    BEFORE UPDATE ON bills
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_bike_models_updated_at
+    BEFORE UPDATE ON bike_models
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Insert predefined bike models
+INSERT INTO bike_models (model_name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle) 
+VALUES
+    ('TMR-COLA5', 249500.00, 'COLA5', 'COLA5', TRUE),
+    ('TMR-X01', 219500.00, 'X01', 'X01', TRUE),
+    ('TMR-G18', 499500.00, 'G18', 'G18', FALSE),
+    ('TMR-MNK3', 475000.00, 'MNK3', 'MNK3', FALSE),
+    ('TMR-Q1', 449500.00, 'Q1', 'Q1', FALSE),
+    ('TMR-ZL', 399500.00, 'ZL', 'ZL', FALSE),
+    ('TMR-ZS', 349500.00, 'ZS', 'ZS', FALSE),
+    ('TMR-XGW', 299500.00, 'XGW', 'XGW', FALSE)
+ON CONFLICT (model_name) DO NOTHING;
+
+-- Create RLS policies
+ALTER TABLE bike_models ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bills ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for authenticated users
+CREATE POLICY "Allow full access to authenticated users" ON bike_models
+    FOR ALL USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow full access to authenticated users" ON bills
+    FOR ALL USING (auth.role() = 'authenticated');
+
+-- Create view for bill summaries
+CREATE OR REPLACE VIEW bill_summaries AS
+SELECT 
+    b.id,
+    b.bill_number,
+    b.bill_type,
+    b.customer_name,
+    b.model_name,
+    bm.is_ebicycle,
+    b.bike_price,
+    b.rmv_charge,
+    b.is_cpz,
+    b.down_payment,
+    b.is_advance_payment,
+    b.advance_amount,
+    b.total_amount,
+    b.balance_amount,
+    b.status,
+    b.bill_date
+FROM bills b
+JOIN bike_models bm ON b.model_name = bm.model_name;
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_bills_customer_nic ON bills(customer_nic);
 CREATE INDEX IF NOT EXISTS idx_bills_status ON bills(status);
 CREATE INDEX IF NOT EXISTS idx_bills_bill_date ON bills(bill_date);
 CREATE INDEX IF NOT EXISTS idx_bills_bill_type ON bills(bill_type);
-
--- Insert or update bike models
-INSERT INTO bike_models (name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle, can_be_leased)
-VALUES 
-    ('TMR-G18', 499500.00, 'G18', 'G18', FALSE, TRUE),
-    ('TMR-MNK3', 475000.00, 'MNK3', 'MNK3', FALSE, TRUE),
-    ('TMR-Q1', 449500.00, 'Q1', 'Q1', FALSE, TRUE),
-    ('TMR-ZL', 399500.00, 'ZL', 'ZL', FALSE, TRUE),
-    ('TMR-ZS', 349500.00, 'ZS', 'ZS', FALSE, TRUE),
-    ('TMR-XGW', 299500.00, 'XGW', 'XGW', FALSE, TRUE),
-    ('TMR-COLA5', 249500.00, 'COLA5', 'COLA5', TRUE, FALSE),
-    ('TMR-X01', 219500.00, 'X01', 'X01', TRUE, FALSE)
-ON CONFLICT (name) 
-DO UPDATE SET 
-    price = EXCLUDED.price,
-    motor_number_prefix = EXCLUDED.motor_number_prefix,
-    chassis_number_prefix = EXCLUDED.chassis_number_prefix,
-    is_ebicycle = EXCLUDED.is_ebicycle,
-    can_be_leased = EXCLUDED.can_be_leased;
-
--- Create bill_summary view for easier calculations
-CREATE OR REPLACE VIEW bill_summary AS
-SELECT 
-    b.*,
-    CASE 
-        WHEN b.bill_type = 'CASH' THEN b.bike_price + b.rmv_charge
-        WHEN b.bill_type = 'LEASE' THEN b.down_payment
-        WHEN b.bill_type = 'ADVANCE_CASH' THEN b.bike_price + b.rmv_charge
-        WHEN b.bill_type = 'ADVANCE_LEASE' THEN b.down_payment
-    END as payable_amount,
-    CASE 
-        WHEN b.bill_type = 'ADVANCE_CASH' THEN b.advance_amount
-        WHEN b.bill_type = 'ADVANCE_LEASE' THEN b.advance_amount
-        ELSE NULL
-    END as paid_advance,
-    bm.is_ebicycle,
-    bm.can_be_leased
-FROM bills b
-JOIN bike_models bm ON b.model_name = bm.name;
 
 -- Add helpful comments
 COMMENT ON TABLE bills IS 'Stores all bill records for scooter sales and leases';

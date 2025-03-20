@@ -1,74 +1,94 @@
-# Electric Scooter Bill Generator
+# Bill Generation System
 
-A web application for generating and managing electric scooter bills, supporting both cash sales and leasing options.
+A comprehensive bill generation system for motorcycle sales, supporting both cash and leasing transactions.
 
 ## Features
 
-- Create and manage bills for electric scooter sales
-- Support for both cash sales and leasing options
-- Automatic price calculation based on bike model
-- PDF bill generation with professional layout
-- Bill preview and download functionality
-- Secure bill storage and management
+### Bill Types
+1. **Cash Bills**
+   - Available for all bike models
+   - Regular bikes: Total = Bike Price + RMV (13,000)
+   - E-bicycles: Total = Bike Price (final price)
+
+2. **Leasing Bills**
+   - Not available for e-bicycles
+   - Shows: Bike Price, RMV as CPZ (13,500), Down Payment
+   - Total Amount = Down Payment
+
+3. **Advance Payment Bills**
+   - For Cash Advance:
+     * Shows: Bike Price, RMV, Advance Amount
+     * Balance = Total Price - Advance Amount
+   - For Leasing Advance:
+     * Shows: Bike Price, CPZ, Down Payment, Advance Amount
+     * Balance = Down Payment - Advance Amount
+
+### Bike Types
+1. **E-Bicycles**
+   - Models: TMR-COLA5, TMR-X01
+   - No RMV charges
+   - Cash sales only
+   - Price in system is final price
+
+2. **Regular Bikes**
+   - All other models
+   - RMV charges apply
+   - Available for both cash and leasing
 
 ## Tech Stack
 
-- **Frontend**: React.js with Vite, TailwindCSS
-- **Backend**: Node.js, Express.js
-- **Database**: PostgreSQL (Supabase)
-- **PDF Generation**: pdf-lib
-- **Hosting**: 
-  - Frontend: Cloudflare Pages
-  - Backend: Railway
-  - Database: Supabase
+- Frontend: React with Ant Design
+- Backend: Supabase
+- Database: PostgreSQL
+- Authentication: Supabase Auth
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js (v14 or higher)
-- npm or yarn
-
-### Installation
+## Setup
 
 1. Clone the repository:
-```bash
-git clone [repository-url]
-cd electric-scooter-bill-generator
-```
+   ```bash
+   git clone [repository-url]
+   cd bill-gen-saas
+   ```
 
 2. Install dependencies:
-```bash
-# Install backend dependencies
-cd backend
-npm install
+   ```bash
+   npm install
+   ```
 
-# Install frontend dependencies
-cd ../frontend
-npm install
-```
+3. Create a `.env` file:
+   ```env
+   REACT_APP_SUPABASE_URL=your_supabase_url
+   REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
 
-3. Set up environment variables:
-```bash
-# In backend directory
-cp .env.example .env
-```
+4. Set up the database:
+   - Run the migrations in `supabase_migration.sql`
+   - This will create all necessary tables and insert default bike models
 
-4. Start the development servers:
-```bash
-# Start backend server (from backend directory)
-npm run dev
+5. Start the development server:
+   ```bash
+   npm start
+   ```
 
-# Start frontend server (from frontend directory)
-npm run dev
-```
+## Database Schema
 
-## Usage
+### bike_models
+- `id`: UUID (Primary Key)
+- `model_name`: Text (Unique)
+- `price`: Decimal
+- `motor_number_prefix`: Text
+- `chassis_number_prefix`: Text
+- `is_ebicycle`: Boolean
 
-1. Access the application at `http://localhost:5173`
-2. Create new bills using the "New Bill" button
-3. View and manage bills in the bill list
-4. Preview or download bills as PDFs
+### bills
+- `id`: UUID (Primary Key)
+- `bill_number`: Text (Unique)
+- `bill_type`: Text ('cash' or 'leasing')
+- `customer_name`: Text
+- `customer_nic`: Text
+- `customer_address`: Text
+- `model_name`: Text (References bike_models)
+- Various amount fields and status tracking
 
 ## Contributing
 
@@ -80,4 +100,4 @@ npm run dev
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License. 

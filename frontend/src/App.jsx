@@ -1,3 +1,4 @@
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
@@ -5,8 +6,10 @@ import BillForm from './pages/BillForm'
 import BillList from './pages/BillList'
 import BillView from './pages/BillView'
 import Dashboard from './pages/Dashboard'
+import BillGenerator from './components/BillGenerator'
+import BillConversion from './components/BillConversion'
 
-function App() {
+const App = () => {
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">
@@ -15,8 +18,9 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/bills" element={<BillList />} />
-            <Route path="/bills/new" element={<BillForm />} />
+            <Route path="/bills/new" element={<BillGenerator />} />
             <Route path="/bills/:id" element={<BillView />} />
+            <Route path="/bills/:id/convert" element={<BillConversion />} />
           </Routes>
         </main>
         <Toaster position="top-right" />
