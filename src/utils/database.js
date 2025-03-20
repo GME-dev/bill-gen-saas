@@ -90,7 +90,6 @@ export async function initializeDatabase() {
             chassis_number TEXT NOT NULL,
             bike_price DECIMAL(10,2) NOT NULL,
             down_payment DECIMAL(10,2),
-            advance_amount DECIMAL(10,2),
             bill_date DATE NOT NULL,
             total_amount DECIMAL(10,2) NOT NULL,
             balance_amount DECIMAL(10,2),
@@ -103,10 +102,11 @@ export async function initializeDatabase() {
           );
         `)
         
-        // Add rmv_charge column if it doesn't exist
+        // Add missing columns if they don't exist
         await client.query(`
           DO $$ 
           BEGIN 
+            -- Add rmv_charge column if it doesn't exist
             IF NOT EXISTS (
               SELECT 1 
               FROM information_schema.columns 
@@ -114,6 +114,16 @@ export async function initializeDatabase() {
             ) THEN
               ALTER TABLE bills 
               ADD COLUMN rmv_charge DECIMAL(10,2) NOT NULL DEFAULT 0;
+            END IF;
+
+            -- Add advance_amount column if it doesn't exist
+            IF NOT EXISTS (
+              SELECT 1 
+              FROM information_schema.columns 
+              WHERE table_name = 'bills' AND column_name = 'advance_amount'
+            ) THEN
+              ALTER TABLE bills 
+              ADD COLUMN advance_amount DECIMAL(10,2);
             END IF;
           END $$;
         `)
@@ -221,8 +231,7 @@ export async function initializeDatabase() {
               WHEN b.bill_type = 'ADVANCE_LEASE' THEN b.down_payment
             END as payable_amount,
             CASE 
-              WHEN b.bill_type = 'ADVANCE_CASH' THEN b.advance_amount
-              WHEN b.bill_type = 'ADVANCE_LEASE' THEN b.advance_amount
+              WHEN b.bill_type IN ('ADVANCE_CASH', 'ADVANCE_LEASE') THEN b.advance_amount
               ELSE NULL
             END as paid_advance,
             bm.is_ebicycle,
