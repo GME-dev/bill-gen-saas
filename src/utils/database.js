@@ -223,7 +223,26 @@ export async function initializeDatabase() {
         await client.query(`
           CREATE OR REPLACE VIEW bill_summary AS
           SELECT 
-            b.*,
+            b.id,
+            b.bill_type,
+            b.customer_name,
+            b.customer_nic,
+            b.customer_address,
+            b.model_name,
+            b.motor_number,
+            b.chassis_number,
+            b.bike_price,
+            b.rmv_charge,
+            b.down_payment,
+            b.advance_amount,
+            b.bill_date,
+            b.total_amount,
+            b.balance_amount,
+            b.status,
+            b.original_bill_id,
+            b.converted_bill_id,
+            b.estimated_delivery_date,
+            b.created_at,
             CASE 
               WHEN b.bill_type = 'CASH' THEN b.bike_price + b.rmv_charge
               WHEN b.bill_type = 'LEASE' THEN b.down_payment
