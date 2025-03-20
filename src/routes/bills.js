@@ -104,9 +104,23 @@ router.get('/:id/pdf', async (req, res) => {
     if (preview === 'true' && formData) {
       // Use the current form data for preview
       const parsedFormData = JSON.parse(formData);
+      // Ensure bill_type is uppercase and matches our enum
+      const billType = parsedFormData.bill_type?.toUpperCase() || 'CASH';
+      
+      // Get bike model info for proper RMV charge calculation
+      const db = getDatabase();
+      const modelResult = await db.query(
+        'SELECT is_ebicycle, can_be_leased FROM bike_models WHERE name = $1',
+        [parsedFormData.model_name]
+      );
+      const bikeModel = modelResult.rows[0] || { is_ebicycle: false, can_be_leased: true };
+
       bill = {
         id: 'PREVIEW',
         ...parsedFormData,
+        bill_type: billType,
+        is_ebicycle: bikeModel.is_ebicycle,
+        can_be_leased: bikeModel.can_be_leased,
         bill_date: new Date().toISOString()
       };
     } else {
