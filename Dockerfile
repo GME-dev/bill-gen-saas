@@ -1,62 +1,38 @@
-# Build stage
-FROM node:18-alpine AS build
+# Build stage for frontend
+FROM node:18-alpine as frontend-build
 
-# Set working directory
-WORKDIR /build
-
-# Copy package files
-COPY package*.json ./
-
-# Install ALL dependencies (including dev dependencies)
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
 RUN npm install
 
-# Explicitly add multer
-RUN npm install multer@1.4.5-lts.1
+# Add antd and other required dependencies
+RUN npm install antd @ant-design/icons react-router-dom @supabase/supabase-js
 
-# Production stage
+COPY frontend/ ./
+RUN npm run build
+
+# Build stage for the final image
 FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy frontend build
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
-# Install dependencies
-RUN npm install --production
-RUN npm install multer@1.4.5-lts.1
+# Copy backend files
+COPY backend/package*.json ./backend/
+WORKDIR /app/backend
+RUN npm install
 
-# Copy node_modules from build stage to ensure all dependencies are included
-COPY --from=build /build/node_modules /app/node_modules
+COPY backend/ ./
 
-# Copy the application files
-COPY src ./src
-COPY assets ./assets
-COPY templates ./templates
-
-# Add any optional files if they exist
-COPY tsconfig.json* ./
-COPY wrangler.toml* ./
-
-# Create necessary directories
-RUN mkdir -p assets/certificates assets/fonts data uploads
+# Copy database migrations
+COPY supabase_migration.sql ./
 
 # Environment variables
-ENV PORT=8080
 ENV NODE_ENV=production
-ENV CORS_ORIGIN=https://tmr-bill-generator.pages.dev
-# Disable SSL verification for Supabase connection
-ENV NODE_TLS_REJECT_UNAUTHORIZED=0
-# DATABASE_URL will be provided by Railway environment variables
-ENV TEMPLATES_DIR=./templates
-ENV FRONTEND_URL=https://tmr-bill-generator.pages.dev
-ENV JWT_SECRET=your-production-secret
+ENV PORT=3000
 
-# Add healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/health || exit 1
+EXPOSE 3000
 
-EXPOSE 8080
-
-# Start command with proper signal handling
-CMD ["node", "--require", "./src/preload/db-fix.cjs", "--dns-result-order=ipv4first", "src/index.js"]
+CMD ["npm", "start"]

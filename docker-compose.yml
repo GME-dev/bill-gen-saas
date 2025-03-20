@@ -2,18 +2,20 @@ version: '3.8'
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      - FRONTEND_URL=http://localhost:3000
-      - CERTIFICATES_DIR=/app/backend/assets/certificates
-      - FONTS_DIR=/app/backend/assets/fonts
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     volumes:
-      - certificates:/app/backend/assets/certificates
-      - fonts:/app/backend/assets/fonts
+      - ./frontend:/app/frontend
+      - ./backend:/app/backend
+      - /app/frontend/node_modules
+      - /app/backend/node_modules
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "http://localhost:3000/api/health"]
