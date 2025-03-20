@@ -89,7 +89,6 @@ export async function initializeDatabase() {
             motor_number TEXT NOT NULL,
             chassis_number TEXT NOT NULL,
             bike_price DECIMAL(10,2) NOT NULL,
-            rmv_charge DECIMAL(10,2) NOT NULL,
             down_payment DECIMAL(10,2),
             advance_amount DECIMAL(10,2),
             bill_date DATE NOT NULL,
@@ -100,19 +99,52 @@ export async function initializeDatabase() {
             converted_bill_id INTEGER REFERENCES bills(id),
             estimated_delivery_date DATE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (model_name) REFERENCES bike_models(name),
-            CONSTRAINT valid_lease_bill CHECK (
-              (bill_type NOT IN ('LEASE', 'ADVANCE_LEASE')) OR 
-              (SELECT can_be_leased FROM bike_models WHERE name = model_name)
-            ),
-            CONSTRAINT valid_rmv_charge CHECK (
-              (rmv_charge = 0 AND (SELECT is_ebicycle FROM bike_models WHERE name = model_name)) OR
-              (rmv_charge = 13000 AND bill_type = 'CASH') OR
-              (rmv_charge = 13500 AND bill_type = 'LEASE') OR
-              (rmv_charge = 13000 AND bill_type = 'ADVANCE_CASH') OR
-              (rmv_charge = 13500 AND bill_type = 'ADVANCE_LEASE')
-            )
+            FOREIGN KEY (model_name) REFERENCES bike_models(name)
           );
+        `)
+        
+        // Add rmv_charge column if it doesn't exist
+        await client.query(`
+          DO $$ 
+          BEGIN 
+            IF NOT EXISTS (
+              SELECT 1 
+              FROM information_schema.columns 
+              WHERE table_name = 'bills' AND column_name = 'rmv_charge'
+            ) THEN
+              ALTER TABLE bills 
+              ADD COLUMN rmv_charge DECIMAL(10,2) NOT NULL DEFAULT 0;
+            END IF;
+          END $$;
+        `)
+        
+        // Add constraints after ensuring column exists
+        await client.query(`
+          DO $$ 
+          BEGIN 
+            -- Drop existing constraints if they exist
+            ALTER TABLE bills DROP CONSTRAINT IF EXISTS valid_lease_bill;
+            ALTER TABLE bills DROP CONSTRAINT IF EXISTS valid_rmv_charge;
+            ALTER TABLE bills DROP CONSTRAINT IF EXISTS valid_balance;
+            
+            -- Add constraints
+            ALTER TABLE bills ADD CONSTRAINT valid_lease_bill 
+              CHECK ((bill_type NOT IN ('LEASE', 'ADVANCE_LEASE')) OR 
+                    (SELECT can_be_leased FROM bike_models WHERE name = model_name));
+            
+            ALTER TABLE bills ADD CONSTRAINT valid_rmv_charge 
+              CHECK ((rmv_charge = 0 AND (SELECT is_ebicycle FROM bike_models WHERE name = model_name)) OR
+                    (rmv_charge = 13000 AND bill_type = 'CASH') OR
+                    (rmv_charge = 13500 AND bill_type = 'LEASE') OR
+                    (rmv_charge = 13000 AND bill_type = 'ADVANCE_CASH') OR
+                    (rmv_charge = 13500 AND bill_type = 'ADVANCE_LEASE'));
+            
+            ALTER TABLE bills ADD CONSTRAINT valid_balance 
+              CHECK ((bill_type = 'CASH' AND balance_amount = total_amount - COALESCE(advance_amount, 0)) OR
+                    (bill_type = 'LEASE' AND balance_amount = down_payment - COALESCE(advance_amount, 0)) OR
+                    (bill_type IN ('ADVANCE_CASH', 'ADVANCE_LEASE') AND balance_amount IS NOT NULL) OR
+                    (bill_type IN ('CASH', 'LEASE') AND advance_amount IS NULL));
+          END $$;
         `)
         
         // Create indexes
