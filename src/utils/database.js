@@ -118,33 +118,87 @@ export async function initializeDatabase() {
           END $$;
         `)
         
-        // Add constraints after ensuring column exists
+        // Create validation functions and triggers
         await client.query(`
-          DO $$ 
-          BEGIN 
-            -- Drop existing constraints if they exist
-            ALTER TABLE bills DROP CONSTRAINT IF EXISTS valid_lease_bill;
-            ALTER TABLE bills DROP CONSTRAINT IF EXISTS valid_rmv_charge;
-            ALTER TABLE bills DROP CONSTRAINT IF EXISTS valid_balance;
+          -- Function to validate lease bills
+          CREATE OR REPLACE FUNCTION validate_lease_bill()
+          RETURNS TRIGGER AS $$
+          DECLARE
+            can_lease BOOLEAN;
+          BEGIN
+            IF NEW.bill_type IN ('LEASE', 'ADVANCE_LEASE') THEN
+              SELECT can_be_leased INTO can_lease
+              FROM bike_models
+              WHERE name = NEW.model_name;
+              
+              IF NOT can_lease THEN
+                RAISE EXCEPTION 'Cannot create lease bill for model % as it cannot be leased', NEW.model_name;
+              END IF;
+            END IF;
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+
+          -- Function to validate RMV charges
+          CREATE OR REPLACE FUNCTION validate_rmv_charge()
+          RETURNS TRIGGER AS $$
+          DECLARE
+            is_ebike BOOLEAN;
+          BEGIN
+            SELECT is_ebicycle INTO is_ebike
+            FROM bike_models
+            WHERE name = NEW.model_name;
             
-            -- Add constraints
-            ALTER TABLE bills ADD CONSTRAINT valid_lease_bill 
-              CHECK ((bill_type NOT IN ('LEASE', 'ADVANCE_LEASE')) OR 
-                    (SELECT can_be_leased FROM bike_models WHERE name = model_name));
-            
-            ALTER TABLE bills ADD CONSTRAINT valid_rmv_charge 
-              CHECK ((rmv_charge = 0 AND (SELECT is_ebicycle FROM bike_models WHERE name = model_name)) OR
-                    (rmv_charge = 13000 AND bill_type = 'CASH') OR
-                    (rmv_charge = 13500 AND bill_type = 'LEASE') OR
-                    (rmv_charge = 13000 AND bill_type = 'ADVANCE_CASH') OR
-                    (rmv_charge = 13500 AND bill_type = 'ADVANCE_LEASE'));
-            
-            ALTER TABLE bills ADD CONSTRAINT valid_balance 
-              CHECK ((bill_type = 'CASH' AND balance_amount = total_amount - COALESCE(advance_amount, 0)) OR
-                    (bill_type = 'LEASE' AND balance_amount = down_payment - COALESCE(advance_amount, 0)) OR
-                    (bill_type IN ('ADVANCE_CASH', 'ADVANCE_LEASE') AND balance_amount IS NOT NULL) OR
-                    (bill_type IN ('CASH', 'LEASE') AND advance_amount IS NULL));
-          END $$;
+            IF is_ebike AND NEW.rmv_charge != 0 THEN
+              RAISE EXCEPTION 'E-bicycles should not have RMV charges';
+            ELSIF NOT is_ebike THEN
+              IF NEW.bill_type IN ('CASH', 'ADVANCE_CASH') AND NEW.rmv_charge != 13000 THEN
+                RAISE EXCEPTION 'Cash bills should have RMV charge of Rs. 13,000';
+              ELSIF NEW.bill_type IN ('LEASE', 'ADVANCE_LEASE') AND NEW.rmv_charge != 13500 THEN
+                RAISE EXCEPTION 'Lease bills should have RMV charge of Rs. 13,500';
+              END IF;
+            END IF;
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+
+          -- Function to validate balance amounts
+          CREATE OR REPLACE FUNCTION validate_balance()
+          RETURNS TRIGGER AS $$
+          BEGIN
+            IF NEW.bill_type = 'CASH' AND NEW.balance_amount != NEW.total_amount - COALESCE(NEW.advance_amount, 0) THEN
+              RAISE EXCEPTION 'Invalid balance amount for cash bill';
+            ELSIF NEW.bill_type = 'LEASE' AND NEW.balance_amount != NEW.down_payment - COALESCE(NEW.advance_amount, 0) THEN
+              RAISE EXCEPTION 'Invalid balance amount for lease bill';
+            ELSIF NEW.bill_type IN ('ADVANCE_CASH', 'ADVANCE_LEASE') AND NEW.balance_amount IS NULL THEN
+              RAISE EXCEPTION 'Balance amount is required for advance bills';
+            ELSIF NEW.bill_type IN ('CASH', 'LEASE') AND NEW.advance_amount IS NOT NULL THEN
+              RAISE EXCEPTION 'Regular bills should not have advance amounts';
+            END IF;
+            RETURN NEW;
+          END;
+          $$ LANGUAGE plpgsql;
+
+          -- Drop existing triggers if they exist
+          DROP TRIGGER IF EXISTS validate_lease_bill_trigger ON bills;
+          DROP TRIGGER IF EXISTS validate_rmv_charge_trigger ON bills;
+          DROP TRIGGER IF EXISTS validate_balance_trigger ON bills;
+
+          -- Create triggers
+          CREATE TRIGGER validate_lease_bill_trigger
+            BEFORE INSERT OR UPDATE ON bills
+            FOR EACH ROW
+            EXECUTE FUNCTION validate_lease_bill();
+
+          CREATE TRIGGER validate_rmv_charge_trigger
+            BEFORE INSERT OR UPDATE ON bills
+            FOR EACH ROW
+            EXECUTE FUNCTION validate_rmv_charge();
+
+          CREATE TRIGGER validate_balance_trigger
+            BEFORE INSERT OR UPDATE ON bills
+            FOR EACH ROW
+            EXECUTE FUNCTION validate_balance();
         `)
         
         // Create indexes
