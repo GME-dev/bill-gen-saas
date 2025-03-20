@@ -38,38 +38,25 @@ export default function BillForm() {
     console.log('- Bike price:', bikePrice);
     console.log('- Current model:', currentModel ? JSON.stringify(currentModel) : 'null');
     console.log('- Model name:', formData.model_name);
+    console.log('- Bill type:', formData.bill_type);
     
-    // Add RMV charges ONLY for regular bikes (not e-bicycles)
-    // EMERGENCY OVERRIDE: Force any COLA5 or X01 model to skip RMV charges
+    // Add RMV charges based on bill type and bike type
     const modelNameUpper = (formData.model_name || '').toUpperCase();
     const isCola5 = modelNameUpper.includes('COLA5');
     const isX01 = modelNameUpper.includes('X01');
+    const isEBicycle = isCola5 || isX01 || (currentModel && currentModel.is_ebicycle);
     
-    if (isCola5 || isX01) {
-      console.log('⚠️ EMERGENCY: Model is COLA5/X01 - SKIPPING RMV CHARGES ENTIRELY');
-      console.log('- Total amount set to bike price only:', bikePrice);
-      
-      setFormData(prev => ({
-        ...prev,
-        total_amount: bikePrice,
-        balance_amount: formData.bill_type === 'advancement' ? bikePrice - parseInt(formData.down_payment || 0) : 0
-      }));
-      return;
-    }
-    
-    // For non-e-bicycles, check the database flag
-    if (currentModel && currentModel.is_ebicycle === false) {
-      if (formData.bill_type !== 'advancement') {
-        console.log('Adding RMV charge for non-e-bicycle model:', formData.model_name);
-        const rmvCharge = 13000;
-        total += rmvCharge;
+    if (!isEBicycle) {
+      // Add RMV charges for non-e-bicycles
+      if (formData.bill_type === 'cash') {
+        total += 13000; // Cash bill RMV charge
+      } else if (formData.bill_type === 'leasing') {
+        total += 13500; // Leasing bill RMV charge
       }
-    } else if (currentModel && currentModel.is_ebicycle === true) {
-      console.log('Model is an e-bicycle - NO RMV CHARGES APPLIED');
-    } else {
-      console.log('No model information available, cannot determine if e-bicycle');
     }
     
+    console.log('- Is E-Bicycle:', isEBicycle);
+    console.log('- RMV Added:', !isEBicycle);
     console.log('- Final total amount:', total);
     
     // Calculate balance for advancement bills
