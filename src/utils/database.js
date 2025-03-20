@@ -296,7 +296,7 @@ export async function initializeDatabase() {
             b.original_bill_id,
             b.converted_bill_id,
             b.estimated_delivery_date,
-            bm.created_at,
+            b.created_at,
             CASE 
               WHEN b.bill_type = 'CASH' THEN b.bike_price + b.rmv_charge
               WHEN b.bill_type = 'LEASE' THEN b.down_payment
