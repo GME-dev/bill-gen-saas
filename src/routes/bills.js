@@ -52,17 +52,18 @@ router.post('/', async (req, res) => {
     } = req.body
 
     const total_amount = bill_type === 'leasing' ? down_payment : bike_price + 15000
+    const rmv_charge = bill_type === 'CASH' ? 13000 : 0
 
     const db = getDatabase()
     const result = await db.query(
       `INSERT INTO bills (
         bill_type, customer_name, customer_nic, customer_address,
         model_name, motor_number, chassis_number, bike_price,
-        down_payment, total_amount
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        down_payment, total_amount, rmv_charge
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [bill_type, customer_name, customer_nic, customer_address,
        model_name, motor_number, chassis_number, bike_price,
-       down_payment, total_amount]
+       down_payment, total_amount, rmv_charge]
     )
 
     res.status(201).json(result.rows[0])
