@@ -112,7 +112,12 @@ router.get('/:id/pdf', async (req, res) => {
     } else {
       // Get bill from database
       const db = getDatabase();
-      const result = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
+      const result = await db.query(`
+        SELECT b.*, bm.is_ebicycle, bm.can_be_leased 
+        FROM bills b 
+        JOIN bike_models bm ON b.model_name = bm.name 
+        WHERE b.id = $1
+      `, [id]);
       if (result.rows.length === 0) {
         return res.status(404).json({ error: 'Bill not found' });
       }
