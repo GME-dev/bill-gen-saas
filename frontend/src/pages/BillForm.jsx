@@ -33,6 +33,7 @@ export default function BillForm() {
   const calculateTotalAndBalance = () => {
     const bikePrice = parseInt(formData.bike_price) || 0;
     let total = bikePrice;
+    let rmvCharge = 0;
     
     console.log('CALCULATE TOTAL DEBUG:');
     console.log('- Bike price:', bikePrice);
@@ -46,17 +47,18 @@ export default function BillForm() {
     const isX01 = modelNameUpper.includes('X01');
     const isEBicycle = isCola5 || isX01 || (currentModel && currentModel.is_ebicycle);
     
-    if (!isEBicycle) {
+    if (!isEBicycle && formData.bill_type !== 'advancement') {
       // Add RMV charges for non-e-bicycles
       if (formData.bill_type === 'cash') {
-        total += 13000; // Cash bill RMV charge
+        rmvCharge = 13000; // Cash bill RMV charge
       } else if (formData.bill_type === 'leasing') {
-        total += 13500; // Leasing bill RMV charge
+        rmvCharge = 13500; // Leasing bill RMV charge
       }
+      total += rmvCharge;
     }
     
     console.log('- Is E-Bicycle:', isEBicycle);
-    console.log('- RMV Added:', !isEBicycle);
+    console.log('- RMV Charge:', rmvCharge);
     console.log('- Final total amount:', total);
     
     // Calculate balance for advancement bills
@@ -69,7 +71,8 @@ export default function BillForm() {
     setFormData(prev => ({
       ...prev,
       total_amount: total,
-      balance_amount: balance
+      balance_amount: balance,
+      rmv_charge: rmvCharge
     }));
   };
 
@@ -408,21 +411,33 @@ export default function BillForm() {
             
             <div>
               <label className="block text-gray-700 font-medium mb-2">Total Amount</label>
-              <input
-                type="number"
-                name="total_amount"
-                value={formData.total_amount}
-                className="form-input w-full rounded-md border-gray-300 bg-gray-100"
-                readOnly
-              />
-              {/* EMERGENCY OVERRIDE: Never show RMV charges for COLA5/X01 models */}
-              {currentModel && 
-               currentModel.is_ebicycle === false && 
-               !(formData.model_name || '').toUpperCase().includes('COLA5') && 
-               !(formData.model_name || '').toUpperCase().includes('X01') && 
-               formData.bill_type !== 'advancement' && (
-                <p className="text-sm text-gray-500 mt-1">Includes Rs. 13,000 RMV charges</p>
-              )}
+              <div>
+                <input
+                  type="number"
+                  name="total_amount"
+                  value={formData.total_amount}
+                  className="form-input w-full rounded-md border-gray-300 bg-gray-100"
+                  readOnly
+                />
+                {/* Show RMV charges for non-e-bicycles and non-advancement bills */}
+                {currentModel && 
+                 !currentModel.is_ebicycle && 
+                 !(formData.model_name || '').toUpperCase().includes('COLA5') && 
+                 !(formData.model_name || '').toUpperCase().includes('X01') && 
+                 formData.bill_type !== 'advancement' && formData.rmv_charge > 0 && (
+                  <div className="mt-2 text-sm">
+                    <div className="text-gray-600">Breakdown:</div>
+                    <div className="flex justify-between text-gray-500">
+                      <span>Bike Price:</span>
+                      <span>Rs. {formData.bike_price.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-500">
+                      <span>RMV Charges:</span>
+                      <span>Rs. {formData.rmv_charge.toLocaleString()}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
