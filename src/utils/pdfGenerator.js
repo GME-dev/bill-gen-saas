@@ -181,10 +181,10 @@ export class PDFGenerator {
                 'LEASE': 'LEASE BILL',
                 'ADVANCE_CASH': 'ADVANCE PAYMENT (CASH)',
                 'ADVANCE_LEASE': 'ADVANCE PAYMENT (LEASE)'
-            }[bill.bill_type];
+            }[bill.bill_type?.toUpperCase()] || 'CASH BILL';
 
-            page.drawText(billTypeText, {
-                x: width / 2 - font.widthOfTextAtSize(billTypeText, 16) / 2,
+            page.drawText(billTypeText || 'CASH BILL', {
+                x: width / 2 - font.widthOfTextAtSize(billTypeText || 'CASH BILL', 16) / 2,
                 y: height - this.margin - 40,
                 size: 16,
                 font: boldFont
@@ -194,32 +194,40 @@ export class PDFGenerator {
             const priceRows = [];
             
             // Add bike price for all types
-            priceRows.push(['Bike Price', `${parseInt(bill.bike_price).toLocaleString()}/=`]);
+            const bikePrice = bill.bike_price ? parseInt(bill.bike_price).toLocaleString() : '0';
+            priceRows.push(['Bike Price', `${bikePrice}/=`]);
             
             // Add RMV charge based on type and model
             if (!bill.is_ebicycle) {
-                priceRows.push(['RMV Charge', bill.bill_type.includes('LEASE') ? 'CPZ' : '13,000/=']);
+                const rmvCharge = bill.bill_type?.toUpperCase().includes('LEASE') ? 'CPZ' : '13,000/=';
+                priceRows.push(['RMV Charge', rmvCharge]);
             }
             
             // Handle down payment for lease types
-            if (bill.bill_type.includes('LEASE')) {
-                priceRows.push(['Down Payment', `${parseInt(bill.down_payment).toLocaleString()}/=`]);
+            if (bill.bill_type?.toUpperCase().includes('LEASE')) {
+                const downPayment = bill.down_payment ? parseInt(bill.down_payment).toLocaleString() : '0';
+                priceRows.push(['Down Payment', `${downPayment}/=`]);
             }
             
             // Handle advance payment if present
             if (bill.advance_amount) {
-                priceRows.push(['Advance Payment', `${parseInt(bill.advance_amount).toLocaleString()}/=`]);
+                const advanceAmount = parseInt(bill.advance_amount).toLocaleString();
+                priceRows.push(['Advance Payment', `${advanceAmount}/=`]);
             }
             
             // Calculate and show total amount
-            const totalText = bill.bill_type.includes('LEASE') ? 
-                `${parseInt(bill.down_payment).toLocaleString()}/= (Down Payment)` :
-                `${parseInt(bill.total_amount).toLocaleString()}/=`;
+            const totalAmount = bill.bill_type?.toUpperCase().includes('LEASE') ? 
+                (bill.down_payment ? parseInt(bill.down_payment).toLocaleString() : '0') :
+                (bill.total_amount ? parseInt(bill.total_amount).toLocaleString() : '0');
+            const totalText = bill.bill_type?.toUpperCase().includes('LEASE') ? 
+                `${totalAmount}/= (Down Payment)` :
+                `${totalAmount}/=`;
             priceRows.push(['Total Amount', totalText]);
             
             // Show balance for advance payments
             if (bill.balance_amount) {
-                priceRows.push(['Balance to Pay', `${parseInt(bill.balance_amount).toLocaleString()}/=`]);
+                const balanceAmount = parseInt(bill.balance_amount).toLocaleString();
+                priceRows.push(['Balance to Pay', `${balanceAmount}/=`]);
             }
 
             // Draw payment details table

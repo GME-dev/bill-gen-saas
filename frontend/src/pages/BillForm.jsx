@@ -164,6 +164,40 @@ export default function BillForm() {
     }
   }
 
+  const handlePreviewPDF = async () => {
+    try {
+      setLoading(true);
+      
+      // Prepare the preview data
+      const previewData = {
+        ...formData,
+        bill_type: formData.bill_type.toUpperCase(),
+        id: 'PREVIEW',
+        bill_date: new Date().toISOString(),
+        is_ebicycle: currentModel?.is_ebicycle || false,
+        can_be_leased: currentModel?.can_be_leased || true,
+        rmv_charge: formData.rmv_charge || 0,
+        total_amount: formData.total_amount || 0,
+        balance_amount: formData.balance_amount || 0
+      };
+
+      // Generate preview PDF
+      const response = await api.get(`/bills/preview/pdf?formData=${encodeURIComponent(JSON.stringify(previewData))}`, {
+        responseType: 'blob'
+      });
+
+      // Create and open preview in new window
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    } catch (error) {
+      toast.error('Failed to generate preview');
+      console.error('Error generating preview:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -174,24 +208,25 @@ export default function BillForm() {
       // Validate fields
       if (!formData.bill_type) {
         toast.error('Please select a bill type');
-        setSubmitting(false);
-        setLoading(false);
         return;
       }
       
-      // Create a copy of the form data
-      const submitData = { ...formData };
-      
-      // Convert 'advancement' to 'advance' for server submission (DB character limit)
-      if (submitData.bill_type === 'advancement') {
-        submitData.bill_type = 'advance';
-      }
+      // Create a copy of the form data with proper formatting
+      const submitData = {
+        ...formData,
+        bill_type: formData.bill_type.toUpperCase(),
+        bike_price: parseFloat(formData.bike_price) || 0,
+        down_payment: parseFloat(formData.down_payment) || 0,
+        total_amount: parseFloat(formData.total_amount) || 0,
+        balance_amount: parseFloat(formData.balance_amount) || 0,
+        rmv_charge: parseFloat(formData.rmv_charge) || 0,
+        is_ebicycle: currentModel?.is_ebicycle || false,
+        can_be_leased: currentModel?.can_be_leased || true
+      };
       
       // Validate that chassis and motor numbers are provided
       if (!submitData.chassis_number || !submitData.motor_number) {
         toast.error('Please provide both chassis and motor numbers');
-        setSubmitting(false);
-        setLoading(false);
         return;
       }
       
@@ -205,20 +240,11 @@ export default function BillForm() {
     } catch (error) {
       console.error('Error creating bill:', error);
       toast.error(error.response?.data?.error || 'Failed to save bill');
+    } finally {
       setSubmitting(false);
       setLoading(false);
     }
   };
-
-  const handlePreviewPDF = async () => {
-    try {
-      // Similar to handleSubmit but for preview
-      // ... existing preview code ...
-    } catch (error) {
-      toast.error('Failed to generate preview')
-      console.error('Error generating preview:', error)
-    }
-  }
 
   return (
     <div className="container mx-auto px-4 py-8">
