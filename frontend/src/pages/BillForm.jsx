@@ -47,12 +47,12 @@ export default function BillForm() {
     const isX01 = modelNameUpper.includes('X01');
     const isEBicycle = isCola5 || isX01 || (currentModel && currentModel.is_ebicycle);
     
-    if (!isEBicycle && formData.bill_type !== 'advancement') {
+    if (!isEBicycle) {
       // Add RMV charges for non-e-bicycles
       if (formData.bill_type === 'cash') {
         rmvCharge = 13000; // Cash bill RMV charge
       } else if (formData.bill_type === 'leasing') {
-        rmvCharge = 13500; // Leasing bill RMV charge
+        rmvCharge = 0; // Leasing bills use CPZ
       }
       total += rmvCharge;
     }
@@ -219,10 +219,16 @@ export default function BillForm() {
         down_payment: parseFloat(formData.down_payment) || 0,
         total_amount: parseFloat(formData.total_amount) || 0,
         balance_amount: parseFloat(formData.balance_amount) || 0,
-        rmv_charge: parseFloat(formData.rmv_charge) || 0,
+        rmv_charge: formData.bill_type === 'cash' ? 13000 : 0, // Ensure cash bills have 13000 RMV charge
         is_ebicycle: currentModel?.is_ebicycle || false,
         can_be_leased: currentModel?.can_be_leased || true
       };
+
+      // Additional validation for RMV charges
+      if (submitData.bill_type === 'CASH' && !submitData.is_ebicycle && submitData.rmv_charge !== 13000) {
+        toast.error('Cash bills must have RMV charge of Rs. 13,000');
+        return;
+      }
       
       // Validate that chassis and motor numbers are provided
       if (!submitData.chassis_number || !submitData.motor_number) {

@@ -199,8 +199,11 @@ export class PDFGenerator {
             
             // Add RMV charge based on type and model
             if (!bill.is_ebicycle) {
-                const rmvCharge = bill.bill_type?.toUpperCase().includes('LEASE') ? 'CPZ' : '13,000/=';
-                priceRows.push(['RMV Charge', rmvCharge]);
+                if (bill.bill_type?.toUpperCase() === 'CASH') {
+                    priceRows.push(['RMV Charge', '13,000/=']);
+                } else if (bill.bill_type?.toUpperCase() === 'LEASE') {
+                    priceRows.push(['RMV Charge', 'CPZ']);
+                }
             }
             
             // Handle down payment for lease types

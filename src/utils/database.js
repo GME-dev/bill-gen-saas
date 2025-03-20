@@ -29,29 +29,29 @@ export async function initializeDatabase() {
 
   while (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
     try {
-      connectionAttempts++
-      console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
-      
-      // Get the database connection string
-      const connectionString = process.env.DATABASE_URL
-      if (!connectionString) {
-        throw new Error('DATABASE_URL environment variable is not set')
-      }
-      
+  connectionAttempts++
+  console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
+  
+    // Get the database connection string
+    const connectionString = process.env.DATABASE_URL
+    if (!connectionString) {
+      throw new Error('DATABASE_URL environment variable is not set')
+    }
+    
       // Mask sensitive information for logging
       const maskedString = connectionString.replace(/:[^:@]+@/, ':****@')
-      console.log(`Using database connection: ${maskedString}`)
-      
+    console.log(`Using database connection: ${maskedString}`)
+    
       // Create the connection pool
       db = new Pool({
-        connectionString,
-        ssl: {
-          rejectUnauthorized: false
-        }
-      })
-      
-      // Test the connection
-      const client = await db.connect()
+      connectionString,
+      ssl: {
+        rejectUnauthorized: false
+      }
+    })
+    
+    // Test the connection
+    const client = await db.connect()
       try {
         // Create ENUM type for bill types
         await client.query(`
@@ -78,16 +78,16 @@ export async function initializeDatabase() {
         `)
         
         // Create or update bills table with minimal required columns
-        await client.query(`
-          CREATE TABLE IF NOT EXISTS bills (
-            id SERIAL PRIMARY KEY,
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS bills (
+          id SERIAL PRIMARY KEY,
             customer_name TEXT NOT NULL,
             customer_nic TEXT NOT NULL,
-            customer_address TEXT NOT NULL,
+          customer_address TEXT NOT NULL,
             model_name TEXT NOT NULL,
             motor_number TEXT NOT NULL,
             chassis_number TEXT NOT NULL,
-            bike_price DECIMAL(10,2) NOT NULL,
+          bike_price DECIMAL(10,2) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (model_name) REFERENCES bike_models(name)
           );
@@ -274,7 +274,7 @@ export async function initializeDatabase() {
         `)
         
         // Create bill_summary view
-        await client.query(`
+      await client.query(`
           CREATE OR REPLACE VIEW bill_summary AS
           SELECT 
             b.id,
@@ -311,9 +311,9 @@ export async function initializeDatabase() {
             bm.can_be_leased
           FROM bills b
           JOIN bike_models bm ON b.model_name = bm.name;
-        `)
-        
-        // Insert predefined bike models if they don't exist
+      `)
+      
+      // Insert predefined bike models if they don't exist
         await client.query(`
           INSERT INTO bike_models (name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle, can_be_leased)
           VALUES 
@@ -336,13 +336,13 @@ export async function initializeDatabase() {
         
         console.log('Database initialization completed successfully')
         break
-      } finally {
-        client.release()
-      }
-    } catch (error) {
+    } finally {
+      client.release()
+    }
+  } catch (error) {
       console.error('Error initializing database:', error)
       if (connectionAttempts === MAX_CONNECTION_ATTEMPTS) {
-        throw error
+      throw error
       }
       await new Promise(resolve => setTimeout(resolve, 5000))
     }
