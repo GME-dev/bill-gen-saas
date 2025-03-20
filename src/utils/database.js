@@ -77,11 +77,10 @@ export async function initializeDatabase() {
           );
         `)
         
-        // Create or update bills table
+        // Create or update bills table with minimal required columns
         await client.query(`
           CREATE TABLE IF NOT EXISTS bills (
             id SERIAL PRIMARY KEY,
-            bill_type bill_type NOT NULL,
             customer_name TEXT NOT NULL,
             customer_nic TEXT NOT NULL,
             customer_address TEXT NOT NULL,
@@ -89,53 +88,71 @@ export async function initializeDatabase() {
             motor_number TEXT NOT NULL,
             chassis_number TEXT NOT NULL,
             bike_price DECIMAL(10,2) NOT NULL,
-            down_payment DECIMAL(10,2),
-            bill_date DATE NOT NULL,
-            total_amount DECIMAL(10,2) NOT NULL,
-            status TEXT DEFAULT 'pending',
-            original_bill_id INTEGER REFERENCES bills(id),
-            converted_bill_id INTEGER REFERENCES bills(id),
-            estimated_delivery_date DATE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (model_name) REFERENCES bike_models(name)
           );
         `)
         
-        // Add missing columns if they don't exist
+        // Add all required columns in one go
         await client.query(`
           DO $$ 
           BEGIN 
-            -- Add rmv_charge column if it doesn't exist
+            -- Add bill_type column and convert to ENUM
             IF NOT EXISTS (
               SELECT 1 
               FROM information_schema.columns 
-              WHERE table_name = 'bills' AND column_name = 'rmv_charge'
+              WHERE table_name = 'bills' AND column_name = 'bill_type'
             ) THEN
+              ALTER TABLE bills ADD COLUMN bill_type TEXT;
+              -- Update existing records to have a default value
+              UPDATE bills SET bill_type = 'CASH' WHERE bill_type IS NULL;
+              -- Convert to ENUM
               ALTER TABLE bills 
-              ADD COLUMN rmv_charge DECIMAL(10,2) NOT NULL DEFAULT 0;
+                ALTER COLUMN bill_type TYPE bill_type 
+                USING bill_type::bill_type;
+              ALTER TABLE bills ALTER COLUMN bill_type SET NOT NULL;
             END IF;
 
-            -- Add advance_amount column if it doesn't exist
-            IF NOT EXISTS (
-              SELECT 1 
-              FROM information_schema.columns 
-              WHERE table_name = 'bills' AND column_name = 'advance_amount'
-            ) THEN
-              ALTER TABLE bills 
-              ADD COLUMN advance_amount DECIMAL(10,2);
+            -- Add all other required columns if they don't exist
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'rmv_charge')
+            THEN ALTER TABLE bills ADD COLUMN rmv_charge DECIMAL(10,2) NOT NULL DEFAULT 0; END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'down_payment')
+            THEN ALTER TABLE bills ADD COLUMN down_payment DECIMAL(10,2); END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'advance_amount')
+            THEN ALTER TABLE bills ADD COLUMN advance_amount DECIMAL(10,2); END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'bill_date')
+            THEN 
+              ALTER TABLE bills ADD COLUMN bill_date DATE;
+              UPDATE bills SET bill_date = created_at::DATE WHERE bill_date IS NULL;
+              ALTER TABLE bills ALTER COLUMN bill_date SET NOT NULL;
             END IF;
 
-            -- Add balance_amount column if it doesn't exist
-            IF NOT EXISTS (
-              SELECT 1 
-              FROM information_schema.columns 
-              WHERE table_name = 'bills' AND column_name = 'balance_amount'
-            ) THEN
-              ALTER TABLE bills 
-              ADD COLUMN balance_amount DECIMAL(10,2);
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'total_amount')
+            THEN 
+              ALTER TABLE bills ADD COLUMN total_amount DECIMAL(10,2);
+              UPDATE bills SET total_amount = bike_price + COALESCE(rmv_charge, 0) WHERE total_amount IS NULL;
+              ALTER TABLE bills ALTER COLUMN total_amount SET NOT NULL;
             END IF;
 
-            -- Update balance_amount for existing records
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'balance_amount')
+            THEN ALTER TABLE bills ADD COLUMN balance_amount DECIMAL(10,2); END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'status')
+            THEN ALTER TABLE bills ADD COLUMN status TEXT DEFAULT 'pending'; END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'original_bill_id')
+            THEN ALTER TABLE bills ADD COLUMN original_bill_id INTEGER REFERENCES bills(id); END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'converted_bill_id')
+            THEN ALTER TABLE bills ADD COLUMN converted_bill_id INTEGER REFERENCES bills(id); END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'bills' AND column_name = 'estimated_delivery_date')
+            THEN ALTER TABLE bills ADD COLUMN estimated_delivery_date DATE; END IF;
+
+            -- Update balance amounts for existing records
             UPDATE bills b
             SET balance_amount = CASE
               WHEN b.bill_type = 'CASH' THEN b.total_amount - COALESCE(b.advance_amount, 0)
@@ -143,6 +160,25 @@ export async function initializeDatabase() {
               ELSE b.balance_amount
             END
             WHERE b.balance_amount IS NULL;
+
+            -- Update RMV charges based on bill type and e-bicycle status
+            UPDATE bills b
+            SET rmv_charge = 
+              CASE 
+                WHEN EXISTS (
+                  SELECT 1 FROM bike_models bm 
+                  WHERE bm.name = b.model_name AND bm.is_ebicycle
+                ) THEN 0
+                WHEN b.bill_type IN ('CASH', 'ADVANCE_CASH') THEN 13000
+                WHEN b.bill_type IN ('LEASE', 'ADVANCE_LEASE') THEN 13500
+                ELSE b.rmv_charge
+              END
+            WHERE b.rmv_charge = 0;
+
+            -- Update total amounts to include RMV charges
+            UPDATE bills b
+            SET total_amount = b.bike_price + b.rmv_charge
+            WHERE b.total_amount = b.bike_price;
           END $$;
         `)
         
