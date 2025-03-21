@@ -20,17 +20,25 @@ const BillList = () => {
       setLoading(true)
       const data = await apiClient.get('/api/bills')
       
+      if (!Array.isArray(data)) {
+        console.error('Invalid response format from API:', data)
+        toast.error('Failed to fetch bills: Invalid response format')
+        setBills([])
+        return
+      }
+      
       // Transform the data for compatibility
       const transformedBills = data.map(bill => ({
         ...bill,
-        id: bill._id,
-        key: bill._id
+        id: bill._id || bill.id,
+        key: bill._id || bill.id || Math.random().toString()
       }))
       
       setBills(transformedBills)
     } catch (error) {
       console.error('Error fetching bills:', error)
-      toast.error('Failed to fetch bills')
+      toast.error(`Failed to fetch bills: ${error.message || 'Server error'}`)
+      setBills([])
     } finally {
       setLoading(false)
     }
@@ -72,12 +80,15 @@ const BillList = () => {
     }
 
     try {
+      setLoading(true)
       await apiClient.delete(`/api/bills/${billId}`)
       toast.success('Bill deleted successfully')
       fetchBills()
     } catch (error) {
       console.error('Error deleting bill:', error)
-      toast.error('Failed to delete bill')
+      toast.error(`Failed to delete bill: ${error.message || 'Server error'}`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -147,7 +158,8 @@ const BillList = () => {
 
   const formatAmount = (amount) => {
     if (amount === undefined || amount === null) return 'Rs. 0';
-    return `Rs. ${Number(amount).toLocaleString()}`;
+    const numericAmount = parseFloat(amount);
+    return isNaN(numericAmount) ? 'Rs. 0' : `Rs. ${numericAmount.toLocaleString()}`;
   };
 
   const filterBills = (bill) => {

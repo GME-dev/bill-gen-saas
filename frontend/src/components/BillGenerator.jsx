@@ -37,9 +37,13 @@ const BillGenerator = () => {
     setSelectedModel(model);
     
     if (model && model.price) {
-      form.setFieldsValue({
-        bike_price: model.price
-      });
+      // Parse the price to ensure it's a number
+      const bikePrice = parseFloat(model.price);
+      if (!isNaN(bikePrice)) {
+        form.setFieldsValue({
+          bike_price: bikePrice
+        });
+      }
     }
   };
 
@@ -128,7 +132,15 @@ const BillGenerator = () => {
       setLoading(true);
       
       // Get the selected model's price if bike_price is missing
-      const bikePrice = values.bike_price || (selectedModel ? selectedModel.price : 0);
+      let bikePrice = values.bike_price || 0;
+      
+      if (!bikePrice && selectedModel && selectedModel.price) {
+        bikePrice = parseFloat(selectedModel.price);
+      }
+      
+      // Ensure price is a valid number
+      bikePrice = parseFloat(bikePrice);
+      if (isNaN(bikePrice)) bikePrice = 0;
       
       // Ensure dates are properly formatted
       const billData = {

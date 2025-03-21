@@ -40,7 +40,17 @@ class ApiClient {
         });
         
         if (!response.ok) {
-          throw new Error(`PDF request failed with status ${response.status}`);
+          const errorText = await response.text();
+          console.error(`PDF request failed with status ${response.status}:`, errorText);
+          
+          try {
+            // Try to parse as JSON if possible
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || errorJson.details || `Server returned status ${response.status}`);
+          } catch (parseError) {
+            // If not JSON, use the raw text or status
+            throw new Error(`PDF request failed with status ${response.status}: ${errorText.substring(0, 100)}`);
+          }
         }
         
         // Return the blob for preview/download
@@ -105,10 +115,18 @@ class ApiClient {
     if (error.response) {
       // The request was made and the server responded with a status code
       // that falls out of the range of 2xx
-      console.error('API Error:', error.response.data);
+      console.error('API Error Response:', error.response.status, error.response.data);
+      if (error.response.data && error.response.data.error) {
+        error.message = error.response.data.error;
+      } else if (error.response.data && error.response.data.message) {
+        error.message = error.response.data.message;
+      } else {
+        error.message = `Server error: ${error.response.status}`;
+      }
     } else if (error.request) {
       // The request was made but no response was received
       console.error('API Error: No response received');
+      error.message = 'No response from server';
     } else {
       // Something happened in setting up the request that triggered an Error
       console.error('API Error:', error.message);

@@ -480,26 +480,36 @@ router.delete('/:id', async (req, res) => {
     
     // Validate that the ID is a valid MongoDB ObjectId
     if (!ObjectId.isValid(id)) {
-      console.log(`Invalid ObjectId format: ${id}`)
+      console.log(`Invalid ObjectId format for deletion: ${id}`)
       return res.status(400).json({ error: 'Invalid bill ID format' })
     }
     
     const db = getDatabase()
     if (!db) {
+      console.error('Database connection not available for bill deletion')
       return res.status(503).json({ error: 'Database connection not available' })
     }
     
-    const collection = db.collection('bills')
-    const result = await collection.deleteOne({ _id: new ObjectId(id) })
+    console.log(`Attempting to delete bill with ID: ${id}`)
     
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Bill not found' })
+    try {
+      const collection = db.collection('bills')
+      const result = await collection.deleteOne({ _id: new ObjectId(id) })
+      
+      if (result.deletedCount === 0) {
+        console.log(`Bill not found for deletion: ${id}`)
+        return res.status(404).json({ error: 'Bill not found' })
+      }
+      
+      console.log(`Successfully deleted bill with ID: ${id}`)
+      return res.status(204).send()
+    } catch (dbError) {
+      console.error(`Database error when deleting bill ${id}:`, dbError)
+      return res.status(500).json({ error: 'Database operation failed', details: dbError.message })
     }
-    
-    res.status(204).send()
   } catch (error) {
     console.error('Error deleting bill:', error)
-    res.status(500).json({ error: 'Failed to delete bill' })
+    return res.status(500).json({ error: 'Failed to delete bill', details: error.message })
   }
 })
 

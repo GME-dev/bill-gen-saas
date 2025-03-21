@@ -68,17 +68,21 @@ const BillView = () => {
 
   const handlePreviewPDF = async () => {
     try {
-      setLoading(true);
+      setPreviewLoading(true);
       const blob = await apiClient.get(`/api/bills/${id}/pdf?preview=true`);
+      
+      if (!blob || !(blob instanceof Blob)) {
+        throw new Error('Invalid response from server');
+      }
       
       // Create a blob URL and open it in a new window
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
     } catch (error) {
       console.error('Error previewing PDF:', error);
-      toast.error('Failed to preview PDF');
+      toast.error(`Failed to preview PDF: ${error.message || 'Server error'}`);
     } finally {
-      setLoading(false);
+      setPreviewLoading(false);
     }
   };
 
@@ -86,6 +90,10 @@ const BillView = () => {
     try {
       setLoading(true);
       const blob = await apiClient.get(`/api/bills/${id}/pdf`);
+      
+      if (!blob || !(blob instanceof Blob)) {
+        throw new Error('Invalid response from server');
+      }
       
       // Create a download link
       const url = URL.createObjectURL(blob);
@@ -95,9 +103,12 @@ const BillView = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the URL object
+      setTimeout(() => URL.revokeObjectURL(url), 100);
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      toast.error('Failed to download PDF');
+      toast.error(`Failed to download PDF: ${error.message || 'Server error'}`);
     } finally {
       setLoading(false);
     }
@@ -163,7 +174,8 @@ const BillView = () => {
 
   const formatAmount = (amount) => {
     if (amount === undefined || amount === null) return 'Rs. 0';
-    return `Rs. ${Number(amount).toLocaleString()}`;
+    const numericAmount = parseFloat(amount);
+    return isNaN(numericAmount) ? 'Rs. 0' : `Rs. ${numericAmount.toLocaleString()}`;
   };
 
   if (loading) {
