@@ -39,11 +39,8 @@ export async function initializeDatabase() {
     // Create the connection pool with minimal configuration
     const config = {
       connectionString,
-      ssl: {
-        rejectUnauthorized: true,
-        // For Supabase, we need to enable SSL but trust the certificate chain
-        ca: process.env.SSL_CERT || undefined
-      },
+      // For pooled connections, we just need to set ssl to true
+      ssl: true,
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000
