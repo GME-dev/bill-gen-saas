@@ -348,6 +348,60 @@ export class PDFGenerator {
             throw new Error(`Failed to generate PDF: ${error.message}`)
         }
     }
+
+    drawVehicleInfo(page, bill, font, boldFont) {
+        const startY = 300;
+        let y = startY;
+        
+        page.drawText('Vehicle Information', {
+            x: this.margin,
+            y,
+            size: 14,
+            font: boldFont
+        });
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Model', bill.model_name],
+            font
+        );
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Type', bill.is_ebicycle ? 'E-bicycle' : 'E-bike'],
+            font
+        );
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Motor Number', bill.motor_number],
+            font
+        );
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Chassis Number', bill.chassis_number],
+            font
+        );
+        
+        return y - 30; // Return next Y position
+    }
 }
 
 export default PDFGenerator 

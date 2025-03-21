@@ -270,7 +270,7 @@ const BillView = () => {
           <Descriptions bordered column={1}>
             <Descriptions.Item label="Model">{bill.model_name}</Descriptions.Item>
             <Descriptions.Item label="Type">
-              {bill.is_ebicycle ? 'Electric Bicycle' : 'Regular Bicycle'}
+              {bill.is_ebicycle ? 'E-bicycle' : 'E-bike'}
             </Descriptions.Item>
             <Descriptions.Item label="Motor Number">{bill.motor_number}</Descriptions.Item>
             <Descriptions.Item label="Chassis Number">{bill.chassis_number}</Descriptions.Item>
