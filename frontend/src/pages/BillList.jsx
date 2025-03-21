@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import api from '../config/api'
 import { Table, Tag, Button, Space } from 'antd'
-import { supabase } from '../config/supabaseClient'
 
 const BillList = () => {
   const navigate = useNavigate()
@@ -17,13 +16,8 @@ const BillList = () => {
   const fetchBills = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('bill_summaries')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setBills(data)
+      const response = await api.get('/bills')
+      setBills(response.data)
     } catch (error) {
       console.error('Error fetching bills:', error)
       toast.error('Failed to load bills')
