@@ -38,16 +38,9 @@ export async function initializeDatabase() {
     const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
     console.log(`Using database connection: ${maskedString}`)
 
-    // Configure SSL if certificate is provided
-    let sslConfig = false
-    if (process.env.CA_CERT) {
-      console.log('Found SSL certificate in environment, configuring secure connection...')
-      sslConfig = {
-        ca: process.env.CA_CERT,
-        rejectUnauthorized: true
-      }
-    } else {
-      console.log('No SSL certificate found in environment variables')
+    // For pooled connections, we need to trust the certificate
+    const sslConfig = {
+      rejectUnauthorized: false // Required for Supabase pooled connections
     }
 
     // Create the connection pool with minimal configuration
@@ -59,7 +52,7 @@ export async function initializeDatabase() {
       connectionTimeoutMillis: 10000
     }
 
-    console.log('Creating database pool with SSL config:', sslConfig ? 'enabled' : 'disabled')
+    console.log('Creating database pool...')
     db = new Pool(config)
 
     // Add error handler for the pool
