@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Select, Switch, InputNumber, Button, Alert, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../config/supabaseClient';
+import apiClient from '../config/apiClient';
+import toast from 'react-hot-toast';
+
+const { Option } = Select;
 
 const BillGenerator = () => {
   const [form] = Form.useForm();
@@ -18,15 +21,11 @@ const BillGenerator = () => {
 
   const fetchBikeModels = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bike_models')
-        .select('*')
-        .order('model_name');
-      
-      if (error) throw error;
+      const data = await apiClient.get('/api/bike-models');
       setBikeModels(data);
     } catch (error) {
-      message.error('Failed to fetch bike models');
+      toast.error('Failed to fetch bike models');
+      console.error('Error fetching bike models:', error);
     }
   };
 
@@ -74,8 +73,8 @@ const BillGenerator = () => {
   };
 
   const handleSubmit = async (values) => {
+    setLoading(true);
     try {
-      setLoading(true);
       const model = bikeModels.find(m => m.model_name === values.model_name);
       const totalAmount = calculateTotalAmount(values);
       
@@ -104,16 +103,17 @@ const BillGenerator = () => {
         status: 'pending'
       };
 
-      const { error } = await supabase
-        .from('bills')
-        .insert([billData]);
+      await apiClient.post('/api/bills', {
+        ...billData,
+        bill_date: values.bill_date.toISOString(),
+        estimated_delivery_date: values.estimated_delivery_date?.toISOString()
+      });
 
-      if (error) throw error;
-
-      message.success('Bill generated successfully');
+      toast.success('Bill generated successfully');
       navigate('/bills');
     } catch (error) {
-      message.error('Failed to generate bill');
+      toast.error('Failed to generate bill');
+      console.error('Error generating bill:', error);
     } finally {
       setLoading(false);
     }
