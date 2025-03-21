@@ -59,31 +59,75 @@ router.post('/', async (req, res) => {
       motor_number,
       chassis_number,
       bike_price,
-      down_payment = 0
+      down_payment = 0,
+      bill_date,
+      is_advance_payment = false,
+      advance_amount = 0,
+      estimated_delivery_date = null,
+      is_cpz = false,
+      rmv_charge: requestedRmvCharge,
+      total_amount: requestedTotalAmount,
+      balance_amount: requestedBalanceAmount
     } = req.body
 
-    const total_amount = bill_type === 'leasing' ? down_payment : bike_price + 15000
-    const rmv_charge = bill_type === 'CASH' ? 13000 : 0
-
+    // Get the database
     const db = getDatabase()
     if (!db) {
       return res.status(503).json({ error: 'Database connection not available' })
     }
     
+    // Get the bike model to determine if it's an e-bicycle
+    const bikeModelsCollection = db.collection('bike_models')
+    const bikeModel = await bikeModelsCollection.findOne({ name: model_name })
+    const isEbicycle = bikeModel?.is_ebicycle || false
+    
+    // Calculate correct values based on business rules
+    let rmv_charge = 0
+    let total_amount = 0
+    let balance_amount = 0
+    
+    if (bill_type.toLowerCase() === 'cash') {
+      // For cash sales
+      if (!isEbicycle) {
+        rmv_charge = 13000 // Regular bikes have RMV charge
+        total_amount = parseFloat(bike_price) + rmv_charge
+      } else {
+        total_amount = parseFloat(bike_price) // E-bicycles just have the bike price
+      }
+    } else {
+      // For leasing
+      rmv_charge = 13500 // CPZ value
+      total_amount = parseFloat(down_payment)
+    }
+    
+    // Calculate balance for advance payments
+    if (is_advance_payment) {
+      balance_amount = total_amount - parseFloat(advance_amount)
+    }
+    
+    // Create the bill object
     const collection = db.collection('bills')
     const newBill = {
-      bill_type,
+      bill_type: bill_type.toUpperCase(),
       customer_name,
       customer_nic, 
       customer_address,
       model_name,
       motor_number, 
       chassis_number,
-      bike_price,
-      down_payment,
+      bike_price: parseFloat(bike_price),
+      down_payment: parseFloat(down_payment) || 0,
       total_amount,
       rmv_charge,
-      bill_date: new Date()
+      is_cpz: bill_type.toLowerCase() === 'leasing',
+      payment_type: bill_type.toLowerCase(),
+      is_advance_payment,
+      advance_amount: parseFloat(advance_amount) || 0,
+      bill_date: bill_date ? new Date(bill_date) : new Date(),
+      estimated_delivery_date: estimated_delivery_date ? new Date(estimated_delivery_date) : null,
+      status: 'pending',
+      balance_amount,
+      created_at: new Date()
     }
     
     const result = await collection.insertOne(newBill)

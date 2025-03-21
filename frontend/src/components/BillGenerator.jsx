@@ -75,8 +75,8 @@ const BillGenerator = () => {
         bill_number: generateBillNumber(),
         status: 'pending',
         is_ebicycle: selectedModel?.is_ebicycle || false,
-        bill_date: values.bill_date.toISOString(),
-        estimated_delivery_date: values.estimated_delivery_date?.toISOString()
+        bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
+        estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null
       };
 
       // Calculate total amount based on bill type and model

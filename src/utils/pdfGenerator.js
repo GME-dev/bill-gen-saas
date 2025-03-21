@@ -75,7 +75,9 @@ export class PDFGenerator {
                 font: boldFont,
             })
 
-            const dateText = `Date: ${new Date(bill.bill_date).toLocaleDateString()}`
+            // Format date safely, handling any potential null/undefined values
+            const formattedDate = bill.bill_date ? new Date(bill.bill_date).toLocaleDateString() : new Date().toLocaleDateString()
+            const dateText = `Date: ${formattedDate}`
             const dateWidth = font.widthOfTextAtSize(dateText, 12)
             page.drawText(dateText, {
                 x: width - this.margin - dateWidth,
