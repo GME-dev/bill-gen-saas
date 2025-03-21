@@ -121,12 +121,24 @@ const BillView = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await apiClient.put(`/api/bills/${id}/status`, { status: newStatus });
-      toast.success(`Bill marked as ${newStatus}`);
-      fetchBill(id);
+      setLoading(true);
+      
+      // Use the dedicated status update endpoint
+      const response = await apiClient.put(`/api/bills/${id}/status`, { status: newStatus });
+      
+      if (response) {
+        toast.success(`Bill status updated to ${newStatus}`);
+        setBill({
+          ...bill,
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        });
+      }
     } catch (error) {
-      console.error('Error updating bill status:', error);
-      toast.error('Failed to update bill status');
+      console.error('Error updating status:', error);
+      toast.error('Failed to update status');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -286,22 +298,22 @@ const BillView = () => {
               <>
                 <Descriptions.Item label="Advance Amount">{formatAmount(bill.advance_amount)}</Descriptions.Item>
                 <Descriptions.Item label="Balance Amount">{formatAmount(bill.balance_amount)}</Descriptions.Item>
-              </>
-            )}
+                </>
+              )}
             {bill.bill_type === 'leasing' && (
               <Descriptions.Item label="Down Payment">{formatAmount(bill.down_payment)}</Descriptions.Item>
             )}
           </Descriptions>
         </Card>
-      </div>
+        </div>
 
       <div className="mt-6 flex space-x-4">
         {bill.status !== 'completed' && (
           <Button
             type="primary"
-            onClick={() => handleStatusChange('completed')}
-          >
-            Mark as Completed
+                onClick={() => handleStatusChange('completed')}
+              >
+                Mark as Completed
           </Button>
         )}
         

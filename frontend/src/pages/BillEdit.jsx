@@ -107,21 +107,34 @@ const BillEdit = () => {
           : parseFloat(bikePrice) + 13000;
         updateData.rmv_charge = selectedModel?.is_ebicycle ? 0 : 13000;
       } else {
-        updateData.total_amount = parseFloat(values.down_payment || 0);
+        // For leasing, ensure down_payment is properly set
+        const downPayment = parseFloat(values.down_payment || 0);
+        updateData.total_amount = selectedModel?.price || bikePrice; // Store the full bike price
+        updateData.down_payment = downPayment;
         updateData.rmv_charge = 13500;
         updateData.is_cpz = true;
       }
 
       // Handle advance payment
       if (isAdvancePayment) {
-        updateData.advance_amount = parseFloat(values.advance_amount || 0);
-        updateData.balance_amount = updateData.total_amount - updateData.advance_amount;
+        const advanceAmount = parseFloat(values.advance_amount || 0);
+        updateData.advance_amount = advanceAmount;
+        
+        if (billType === 'cash') {
+          updateData.balance_amount = updateData.total_amount - advanceAmount;
+        } else {
+          updateData.balance_amount = updateData.down_payment - advanceAmount;
+        }
       }
 
-      await apiClient.put(`/api/bills/${id}`, updateData);
+      const response = await apiClient.put(`/api/bills/${id}`, updateData);
       
-      toast.success('Bill updated successfully');
-      navigate(`/bills/${id}`);
+      if (response) {
+        toast.success('Bill updated successfully');
+        navigate(`/bills/${id}`);
+      } else {
+        throw new Error('Failed to update bill');
+      }
     } catch (error) {
       console.error('Error updating bill:', error);
       toast.error('Failed to update bill');
@@ -206,8 +219,13 @@ const BillEdit = () => {
             >
               <InputNumber
                 className="w-full"
+                min={1000}
+                step={1000}
                 formatter={value => `Rs. ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={value => value.replace(/[^\d.]/g, '')}
+                parser={value => {
+                  const parsed = value.replace(/[^\d]/g, '');
+                  return parsed ? parseInt(parsed) : 1000;
+                }}
               />
             </Form.Item>
           )}

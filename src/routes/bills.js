@@ -413,7 +413,7 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// Add a dedicated route for status updates
+// Fix the status update route
 router.put('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
@@ -421,19 +421,29 @@ router.put('/:id/status', async (req, res) => {
     
     // Validate that the ID is a valid MongoDB ObjectId
     if (!ObjectId.isValid(id)) {
-      console.log(`Invalid ObjectId format for status update: ${id}`)
-      return res.status(400).json({ error: 'Invalid bill ID format' })
+      console.log(`Invalid ObjectId format for status update: ${id}`);
+      return res.status(400).json({ error: 'Invalid bill ID format' });
+    }
+    
+    if (!status) {
+      return res.status(400).json({ error: 'Status is required' });
     }
     
     const db = getDatabase();
     if (!db) {
-      return res.status(503).json({ error: 'Database connection not available' })
+      return res.status(503).json({ error: 'Database connection not available' });
     }
+    
+    console.log(`Updating bill ${id} status to ${status}`);
     
     const collection = db.collection('bills');
     const result = await collection.findOneAndUpdate(
       { _id: new ObjectId(id) },
-      { $set: { status: status } },
+      { $set: { 
+          status: status,
+          updated_at: new Date()
+        } 
+      },
       { returnDocument: 'after' }
     );
     
@@ -441,10 +451,11 @@ router.put('/:id/status', async (req, res) => {
       return res.status(404).json({ error: 'Bill not found' });
     }
     
+    console.log(`Status updated successfully: ${JSON.stringify(result.value)}`);
     res.json(result.value);
   } catch (error) {
     console.error('Error updating bill status:', error);
-    res.status(500).json({ error: 'Failed to update bill status' });
+    res.status(500).json({ error: 'Failed to update bill status', details: error.message });
   }
 });
 

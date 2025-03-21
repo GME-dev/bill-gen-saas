@@ -166,15 +166,24 @@ const BillGenerator = () => {
           : parseFloat(bikePrice) + 13000;
         billData.rmv_charge = selectedModel?.is_ebicycle ? 0 : 13000;
       } else {
-        billData.total_amount = parseFloat(values.down_payment || 0);
+        // For leasing, ensure down_payment is properly set
+        const downPayment = parseFloat(values.down_payment || 0);
+        billData.total_amount = selectedModel?.price || bikePrice; // Store the full bike price
+        billData.down_payment = downPayment;
         billData.rmv_charge = 13500;
         billData.is_cpz = true;
       }
 
       // Handle advance payment
       if (isAdvancePayment) {
-        billData.advance_amount = parseFloat(values.advance_amount || 0);
-        billData.balance_amount = billData.total_amount - billData.advance_amount;
+        const advanceAmount = parseFloat(values.advance_amount || 0);
+        billData.advance_amount = advanceAmount;
+        
+        if (billType === 'cash') {
+          billData.balance_amount = billData.total_amount - advanceAmount;
+        } else {
+          billData.balance_amount = billData.down_payment - advanceAmount;
+        }
       }
 
       const response = await apiClient.post('/api/bills', billData);
@@ -256,8 +265,13 @@ const BillGenerator = () => {
           >
             <InputNumber
               className="w-full"
+              min={1000}
+              step={1000}
               formatter={value => `Rs. ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              parser={value => value.replace(/[^\d.]/g, '')}
+              parser={value => {
+                const parsed = value.replace(/[^\d]/g, '');
+                return parsed ? parseInt(parsed) : 1000;
+              }}
             />
           </Form.Item>
         )}

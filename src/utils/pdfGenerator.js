@@ -57,295 +57,41 @@ export class PDFGenerator {
 
     async generateBill(bill) {
         try {
-            const pdfDoc = await PDFDocument.create()
-            const page = pdfDoc.addPage([this.pageWidth, this.pageHeight])
-            const { width, height } = page.getSize()
+            // Create a new PDF document
+            const pdfDoc = await PDFDocument.create();
             
-            // Get the standard font
-            const font = await pdfDoc.embedFont(StandardFonts.Helvetica)
-            const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold)
+            // Embed fonts
+            const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
             
-            // Bill details (right aligned)
-            const billNoText = `Bill No: ${bill.id}`
-            const billNoWidth = font.widthOfTextAtSize(billNoText, 12)
-            page.drawText(billNoText, {
-                x: width - this.margin - billNoWidth,
-                y: height - this.margin,
-                size: 12,
-                font: boldFont,
-            })
-
-            // Format date safely, handling any potential null/undefined values
-            const formattedDate = bill.bill_date ? new Date(bill.bill_date).toLocaleDateString() : new Date().toLocaleDateString()
-            const dateText = `Date: ${formattedDate}`
-            const dateWidth = font.widthOfTextAtSize(dateText, 12)
-            page.drawText(dateText, {
-                x: width - this.margin - dateWidth,
-                y: height - this.margin - 20,
-                size: 12,
-                font,
-            })
+            // Add a page
+            const page = pdfDoc.addPage([612, 792]);
             
-            try {
-                // Load and embed the logo image from local file
-                const logoImageBytes = await fs.promises.readFile(this.logoPath)
-                const logoImage = await pdfDoc.embedPng(logoImageBytes)
-                
-                // Calculate logo dimensions (maintain aspect ratio)
-                const logoWidth = 70
-                const logoHeight = logoWidth
-                
-                // Draw logo at left side with adjusted position
-                page.drawImage(logoImage, {
-                    x: this.margin,
-                    y: height - this.margin - logoHeight + 25,  // Adjusted position
-                    width: logoWidth,
-                    height: logoHeight,
-                })
-            } catch (error) {
-                console.error('Error embedding logo:', error)
-            }
-
-            // Draw company name with adjusted position and size
-            page.drawText('TMR TRADING LANKA (PVT) LTD', {
-                x: this.margin + 85,  // Adjusted position
-                y: height - this.margin - 20,  // Aligned with bill number
-                size: 18,  // Increased size
-                font: boldFont,
-            })
-
-            // Dealer information with adjusted spacing
-            page.drawText('GUNAWARDANA MOTORS, EMBILIPITIYA', {
-                x: this.margin,
-                y: height - this.margin - 60,  // Adjusted spacing
-                size: 14,
-                font: boldFont,
-            })
-
-            page.drawText('AUTHORIZED DEALER - EMBILIPITIYA', {
-                x: this.margin,
-                y: height - this.margin - 80,  // Adjusted spacing
-                size: 12,
-                font: boldFont,
-            })
-
-            // Customer Information with adjusted spacing
-            const customerY = height - this.margin - 130  // Increased gap after header
-            page.drawText('Customer Details:', {
-                x: this.margin,
-                y: customerY,
-                size: 14,
-                font: boldFont,
-            })
-
-            const customerDetails = [
-                `Name: ${bill.customer_name}`,
-                `NIC: ${bill.customer_nic}`,
-                `Address: ${bill.customer_address}`,
-            ]
-
-            customerDetails.forEach((line, index) => {
-                page.drawText(line, {
-                    x: this.margin,
-                    y: customerY - 25 - (index * 20),
-                    size: 12,
-                    font,
-                })
-            })
-
-            // Vehicle Information
-            const vehicleY = customerY - 120
-            page.drawText('Vehicle Details:', {
-                x: this.margin,
-                y: vehicleY,
-                size: 14,
-                font: boldFont,
-            })
-
-            const vehicleDetails = [
-                `Model: ${bill.model_name}`,
-                `Motor Number: ${bill.motor_number}`,
-                `Chassis Number: ${bill.chassis_number}`,
-            ]
-
-            vehicleDetails.forEach((line, index) => {
-                page.drawText(line, {
-                    x: this.margin,
-                    y: vehicleY - 25 - (index * 20),
-                    size: 12,
-                    font,
-                })
-            })
-
-            // Bill Type Header
-            const billTypeText = {
-                'CASH': 'CASH BILL',
-                'LEASE': 'LEASE BILL',
-                'ADVANCE_CASH': 'ADVANCE PAYMENT (CASH)',
-                'ADVANCE_LEASE': 'ADVANCE PAYMENT (LEASE)'
-            }[bill.bill_type?.toUpperCase()] || 'CASH BILL';
-
-            page.drawText(billTypeText || 'CASH BILL', {
-                x: width / 2 - font.widthOfTextAtSize(billTypeText || 'CASH BILL', 16) / 2,
-                y: height - this.margin - 40,
-                size: 16,
-                font: boldFont
-            });
-
-            // Price Details Section
-            const priceRows = [];
+            // Add company header
+            this.drawHeader(page, boldFont);
             
-            // Add bike price for all types
-            const bikePrice = bill.bike_price ? parseInt(bill.bike_price).toLocaleString() : '0';
-            priceRows.push(['Bike Price', `${bikePrice}/=`]);
+            // Draw bill details
+            const billDetailsEndY = this.drawBillDetails(page, bill, regularFont, boldFont);
             
-            // Add RMV charge based on type and model
-            if (!bill.is_ebicycle) {
-                if (bill.bill_type?.toUpperCase() === 'CASH') {
-                    priceRows.push(['RMV Charge', '13,000/=']);
-                } else if (bill.bill_type?.toUpperCase() === 'LEASE') {
-                    priceRows.push(['RMV Charge', 'CPZ']);
-                }
-            }
+            // Draw customer information
+            const customerInfoEndY = this.drawCustomerInfo(page, bill, regularFont, boldFont);
             
-            // Handle down payment for lease types
-            if (bill.bill_type?.toUpperCase().includes('LEASE')) {
-                const downPayment = bill.down_payment ? parseInt(bill.down_payment).toLocaleString() : '0';
-                priceRows.push(['Down Payment', `${downPayment}/=`]);
-            }
+            // Draw vehicle information
+            const vehicleInfoEndY = this.drawVehicleInfo(page, bill, regularFont, boldFont);
             
-            // Handle advance payment if present
-            if (bill.advance_amount) {
-                const advanceAmount = parseInt(bill.advance_amount).toLocaleString();
-                priceRows.push(['Advance Payment', `${advanceAmount}/=`]);
-            }
+            // Draw price details
+            const priceDetailsEndY = this.drawPriceDetails(page, bill, regularFont, boldFont);
             
-            // Calculate and show total amount
-            const totalAmount = bill.bill_type?.toUpperCase().includes('LEASE') ? 
-                (bill.down_payment ? parseInt(bill.down_payment).toLocaleString() : '0') :
-                (bill.total_amount ? parseInt(bill.total_amount).toLocaleString() : '0');
-            const totalText = bill.bill_type?.toUpperCase().includes('LEASE') ? 
-                `${totalAmount}/= (Down Payment)` :
-                `${totalAmount}/=`;
-            priceRows.push(['Total Amount', totalText]);
+            // Draw footer
+            this.drawFooter(page, regularFont);
             
-            // Show balance for advance payments
-            if (bill.balance_amount) {
-                const balanceAmount = parseInt(bill.balance_amount).toLocaleString();
-                priceRows.push(['Balance to Pay', `${balanceAmount}/=`]);
-            }
-
-            // Draw payment details table
-            let tableY = vehicleY - 30
+            // Save the PDF
+            const pdfBytes = await pdfDoc.save();
             
-            // Table header
-            tableY = this.drawTableRow(
-                page,
-                this.margin,
-                tableY,
-                ['Description', 'Amount (Rs.)'],
-                boldFont,
-                12,
-                true
-            )
-
-            // Table rows
-            priceRows.forEach((row, index) => {
-                tableY = this.drawTableRow(
-                    page,
-                    this.margin,
-                    tableY,
-                    row,
-                    font
-                )
-            })
-
-            // Terms and Conditions
-            const termsY = tableY - 80
-            page.drawText('Terms and Conditions:', {
-                x: this.margin,
-                y: termsY,
-                size: 12,
-                font: boldFont,
-            })
-
-            // Add appropriate footer notes
-            const footerNotes = [
-                '1. All prices are in Sri Lankan Rupees.',
-                '2. This bill is valid for 30 days.',
-                '3. This is a computer-generated bill.',
-            ];
-
-            if (bill.bill_type.includes('ADVANCE')) {
-                footerNotes.push(
-                    '4. This is an advance payment receipt.',
-                    bill.bill_type === 'ADVANCE_LEASE' ?
-                        '5. Final lease agreement will be prepared upon full down payment.' :
-                        '5. Final bill will be issued upon full payment.'
-                );
-            } else if (bill.bill_type === 'LEASE') {
-                footerNotes.push(
-                    '4. CPZ indicates RMV charges are capitalized.',
-                    '5. Please refer to the lease agreement for full terms.'
-                );
-            }
-
-            footerNotes.forEach((line, index) => {
-                page.drawText(line, {
-                    x: this.margin,
-                    y: termsY - 20 - (index * 15),
-                    size: 10,
-                    font,
-                    color: rgb(0.3, 0.3, 0.3),
-                })
-            })
-
-            // Footer
-            page.drawText('Thank you for your business!', {
-                x: width / 2 - 70,
-                y: this.margin + 15,
-                size: 12,
-                font: boldFont,
-            })
-
-            // Signatures
-            const signatureY = this.margin + 60
-            
-            // Dealer signature
-            page.drawLine({
-                start: { x: this.margin, y: signatureY },
-                end: { x: this.margin + 150, y: signatureY },
-                thickness: 1,
-                color: rgb(0, 0, 0),
-            })
-            
-            page.drawText('Dealer Signature', {
-                x: this.margin,
-                y: signatureY - 15,
-                size: 10,
-                font,
-            })
-
-            // Rubber stamp line
-            page.drawLine({
-                start: { x: width - this.margin - 150, y: signatureY },
-                end: { x: width - this.margin, y: signatureY },
-                thickness: 1,
-                color: rgb(0, 0, 0),
-            })
-            
-            page.drawText('Rubber Stamp', {
-                x: width - this.margin - 150,
-                y: signatureY - 15,
-                size: 10,
-                font,
-            })
-
-            // Generate PDF
-            return await pdfDoc.save()
+            return Buffer.from(pdfBytes);
         } catch (error) {
-            console.error('Error generating PDF:', error)
-            throw new Error(`Failed to generate PDF: ${error.message}`)
+            console.error('Error generating PDF:', error);
+            throw new Error(`PDF generation failed: ${error.message}`);
         }
     }
 
@@ -401,6 +147,297 @@ export class PDFGenerator {
         );
         
         return y - 30; // Return next Y position
+    }
+
+    drawHeader(page, boldFont) {
+        const { width, height } = page.getSize();
+        
+        // Draw bill title
+        page.drawText('INVOICE', {
+            x: width / 2 - 50,
+            y: height - 50,
+            size: 24,
+            font: boldFont
+        });
+        
+        // Draw company name
+        page.drawText('TMR TRADING LANKA (PVT) LTD', {
+            x: this.margin,
+            y: height - 100,
+            size: 16,
+            font: boldFont
+        });
+        
+        // Draw company address
+        page.drawText('GUNAWARDANA MOTORS, EMBILIPITIYA', {
+            x: this.margin,
+            y: height - 120,
+            size: 12,
+            font: boldFont
+        });
+        
+        // Draw authorized dealer
+        page.drawText('AUTHORIZED DEALER - EMBILIPITIYA', {
+            x: this.margin,
+            y: height - 140,
+            size: 12,
+            font: boldFont
+        });
+        
+        return height - 160;
+    }
+
+    drawBillDetails(page, bill, regularFont, boldFont) {
+        const { width, height } = page.getSize();
+        
+        // Draw bill number
+        page.drawText(`Bill No: ${bill.bill_number || bill._id}`, {
+            x: width - 200,
+            y: height - 100,
+            size: 12,
+            font: boldFont
+        });
+        
+        // Format date safely
+        const billDate = bill.bill_date ? new Date(bill.bill_date).toLocaleDateString() : 'N/A';
+        page.drawText(`Date: ${billDate}`, {
+            x: width - 200,
+            y: height - 120,
+            size: 12,
+            font: regularFont
+        });
+        
+        // Draw bill type
+        const billTypeText = bill.bill_type?.toUpperCase() === 'LEASING' ? 'LEASING BILL' : 'CASH BILL';
+        page.drawText(billTypeText, {
+            x: width / 2 - 50,
+            y: height - 80,
+            size: 14,
+            font: boldFont
+        });
+        
+        return height - 160;
+    }
+
+    drawCustomerInfo(page, bill, regularFont, boldFont) {
+        const startY = 600;
+        let y = startY;
+        
+        page.drawText('Customer Information', {
+            x: this.margin,
+            y,
+            size: 14,
+            font: boldFont
+        });
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Name', bill.customer_name || 'N/A'],
+            regularFont
+        );
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['NIC', bill.customer_nic || 'N/A'],
+            regularFont
+        );
+        
+        y -= 30;
+        
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Address', bill.customer_address || 'N/A'],
+            regularFont
+        );
+        
+        return y - 30;
+    }
+
+    drawPriceDetails(page, bill, regularFont, boldFont) {
+        const startY = 400;
+        let y = startY;
+        
+        page.drawText('Payment Details', {
+            x: this.margin,
+            y,
+            size: 14,
+            font: boldFont
+        });
+        
+        y -= 30;
+        
+        // Draw table header
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Description', 'Amount'],
+            boldFont,
+            12,
+            true
+        );
+        
+        y -= 30;
+        
+        // Draw bike price
+        const bikePrice = bill.bike_price ? `Rs. ${parseInt(bill.bike_price).toLocaleString()}` : 'Rs. 0';
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Bike Price', bikePrice],
+            regularFont
+        );
+        
+        y -= 30;
+        
+        // Add RMV charge based on type and model
+        if (!bill.is_ebicycle) {
+            if (bill.bill_type?.toUpperCase() === 'CASH') {
+                this.drawTableRow(
+                    page,
+                    this.margin,
+                    y,
+                    ['RMV Charge', 'Rs. 13,000'],
+                    regularFont
+                );
+                y -= 30;
+            } else if (bill.bill_type?.toUpperCase() === 'LEASING') {
+                this.drawTableRow(
+                    page,
+                    this.margin,
+                    y,
+                    ['RMV Charge', 'CPZ'],
+                    regularFont
+                );
+                y -= 30;
+            }
+        }
+        
+        // Handle down payment for lease
+        if (bill.bill_type?.toUpperCase() === 'LEASING') {
+            const downPayment = bill.down_payment ? `Rs. ${parseInt(bill.down_payment).toLocaleString()}` : 'Rs. 0';
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Down Payment', downPayment],
+                regularFont
+            );
+            y -= 30;
+        }
+        
+        // Handle advance payment
+        if (bill.is_advance_payment) {
+            const advanceAmount = bill.advance_amount ? `Rs. ${parseInt(bill.advance_amount).toLocaleString()}` : 'Rs. 0';
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Advance Amount', advanceAmount],
+                regularFont
+            );
+            y -= 30;
+            
+            if (bill.balance_amount) {
+                const balanceAmount = `Rs. ${parseInt(bill.balance_amount).toLocaleString()}`;
+                this.drawTableRow(
+                    page,
+                    this.margin,
+                    y,
+                    ['Balance Amount', balanceAmount],
+                    regularFont
+                );
+                y -= 30;
+            }
+        }
+        
+        // Draw total amount
+        const totalAmount = bill.total_amount ? `Rs. ${parseInt(bill.total_amount).toLocaleString()}` : 'Rs. 0';
+        this.drawTableRow(
+            page,
+            this.margin,
+            y,
+            ['Total Amount', totalAmount],
+            boldFont
+        );
+        
+        return y - 30;
+    }
+
+    drawFooter(page, regularFont) {
+        const { width, height } = page.getSize();
+        
+        // Terms and conditions
+        page.drawText('Terms and Conditions:', {
+            x: this.margin,
+            y: 200,
+            size: 12,
+            font: regularFont
+        });
+        
+        const terms = [
+            '1. All prices are in Sri Lankan Rupees.',
+            '2. This invoice is valid for 30 days from the issue date.',
+            '3. This is a computer-generated document and does not require a signature.',
+            '4. Please retain this invoice for future reference.'
+        ];
+        
+        terms.forEach((term, index) => {
+            page.drawText(term, {
+                x: this.margin,
+                y: 180 - (index * 15),
+                size: 10,
+                font: regularFont
+            });
+        });
+        
+        // Signatures
+        page.drawLine({
+            start: { x: this.margin, y: 80 },
+            end: { x: this.margin + 150, y: 80 },
+            thickness: 1
+        });
+        
+        page.drawText('Authorized Signature', {
+            x: this.margin + 30,
+            y: 65,
+            size: 10,
+            font: regularFont
+        });
+        
+        page.drawLine({
+            start: { x: width - this.margin - 150, y: 80 },
+            end: { x: width - this.margin, y: 80 },
+            thickness: 1
+        });
+        
+        page.drawText('Customer Signature', {
+            x: width - this.margin - 120,
+            y: 65,
+            size: 10,
+            font: regularFont
+        });
+        
+        // Thank you message
+        page.drawText('Thank you for your business!', {
+            x: width / 2 - 80,
+            y: 30,
+            size: 12,
+            font: regularFont
+        });
+        
+        return 0;
     }
 }
 
