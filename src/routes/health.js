@@ -16,8 +16,12 @@ router.get('/', async (req, res) => {
         }
         
         // Test database connection
-        await db.query('SELECT 1');
-        res.json({ status: 'healthy', message: 'Service is running' });
+        if (db) {
+            await db.command({ ping: 1 });
+            res.json({ status: 'healthy', message: 'Service is running' });
+        } else {
+            throw new Error('Database connection not available');
+        }
     } catch (error) {
         console.error('Health check failed:', error);
         // Return 200 status for initial health checks to allow container to start

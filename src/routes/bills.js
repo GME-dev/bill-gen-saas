@@ -2,6 +2,7 @@ import express from 'express'
 import { getDatabase } from '../utils/database.js'
 import { generateBill } from '../utils/billGenerator.js'
 import { PDFGenerator } from '../utils/pdfGenerator.js'
+import { ObjectId } from 'mongodb'
 
 const router = express.Router()
 const pdfGenerator = new PDFGenerator()
@@ -10,8 +11,13 @@ const pdfGenerator = new PDFGenerator()
 router.get('/', async (req, res) => {
   try {
     const db = getDatabase()
-    const result = await db.query('SELECT * FROM bills ORDER BY bill_date DESC')
-    res.json(result.rows)
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const collection = db.collection('bills')
+    const bills = await collection.find({}).sort({ bill_date: -1 }).toArray()
+    res.json(bills)
   } catch (error) {
     console.error('Error fetching bills:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -23,13 +29,18 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params
     const db = getDatabase()
-    const result = await db.query('SELECT * FROM bills WHERE id = $1', [id])
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
     
-    if (result.rows.length === 0) {
+    const collection = db.collection('bills')
+    const bill = await collection.findOne({ _id: new ObjectId(id) })
+    
+    if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
 
-    res.json(result.rows[0])
+    res.json(bill)
   } catch (error) {
     console.error('Error fetching bill:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -55,18 +66,30 @@ router.post('/', async (req, res) => {
     const rmv_charge = bill_type === 'CASH' ? 13000 : 0
 
     const db = getDatabase()
-    const result = await db.query(
-      `INSERT INTO bills (
-        bill_type, customer_name, customer_nic, customer_address,
-        model_name, motor_number, chassis_number, bike_price,
-        down_payment, total_amount, rmv_charge
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [bill_type, customer_name, customer_nic, customer_address,
-       model_name, motor_number, chassis_number, bike_price,
-       down_payment, total_amount, rmv_charge]
-    )
-
-    res.status(201).json(result.rows[0])
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const collection = db.collection('bills')
+    const newBill = {
+      bill_type,
+      customer_name,
+      customer_nic, 
+      customer_address,
+      model_name,
+      motor_number, 
+      chassis_number,
+      bike_price,
+      down_payment,
+      total_amount,
+      rmv_charge,
+      bill_date: new Date()
+    }
+    
+    const result = await collection.insertOne(newBill)
+    newBill._id = result.insertedId
+    
+    res.status(201).json(newBill)
   } catch (error) {
     console.error('Error creating bill:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -77,18 +100,25 @@ router.post('/', async (req, res) => {
 router.get('/:id/generate', async (req, res) => {
   try {
     const db = getDatabase()
-    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const collection = db.collection('bills')
+    const bill = await collection.findOne({ _id: new ObjectId(req.params.id) })
+    
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
     
-    const items = await db.all('SELECT * FROM bill_items WHERE bill_id = ?', [req.params.id])
+    const itemsCollection = db.collection('bill_items')
+    const items = await itemsCollection.find({ bill_id: req.params.id }).toArray()
     bill.items = items
     
     const docxBuffer = await generateBill(bill)
     
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill.id}.docx`)
+    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill._id}.docx`)
     res.send(docxBuffer)
   } catch (error) {
     res.status(500).json({ error: error.message })
@@ -110,11 +140,13 @@ router.get('/:id/pdf', async (req, res) => {
       
       // Get bike model info for proper RMV charge calculation
       const db = getDatabase();
-      const modelResult = await db.query(
-        'SELECT is_ebicycle, can_be_leased FROM bike_models WHERE name = $1',
-        [parsedFormData.model_name]
-      );
-      const bikeModel = modelResult.rows[0] || { is_ebicycle: false, can_be_leased: true };
+      if (!db) {
+        return res.status(503).json({ error: 'Database connection not available' })
+      }
+      
+      const bikeModelsCollection = db.collection('bike_models')
+      const bikeModel = await bikeModelsCollection.findOne({ name: parsedFormData.model_name })
+        || { is_ebicycle: false, can_be_leased: true };
 
       bill = {
         id: 'PREVIEW',
@@ -127,16 +159,23 @@ router.get('/:id/pdf', async (req, res) => {
     } else {
       // Get bill from database
       const db = getDatabase();
-      const result = await db.query(`
-        SELECT b.*, bm.is_ebicycle, bm.can_be_leased 
-        FROM bills b 
-        JOIN bike_models bm ON b.model_name = bm.name 
-        WHERE b.id = $1
-      `, [id]);
-      if (result.rows.length === 0) {
+      if (!db) {
+        return res.status(503).json({ error: 'Database connection not available' })
+      }
+      
+      const billsCollection = db.collection('bills')
+      const bikeModelsCollection = db.collection('bike_models')
+      
+      const bill = await billsCollection.findOne({ _id: new ObjectId(id) })
+      if (!bill) {
         return res.status(404).json({ error: 'Bill not found' });
       }
-      bill = result.rows[0];
+      
+      const bikeModel = await bikeModelsCollection.findOne({ name: bill.model_name })
+        || { is_ebicycle: false, can_be_leased: true };
+      
+      bill.is_ebicycle = bikeModel.is_ebicycle
+      bill.can_be_leased = bikeModel.can_be_leased
     }
 
     const pdfBuffer = await pdfGenerator.generateBill(bill);
@@ -144,7 +183,7 @@ router.get('/:id/pdf', async (req, res) => {
     // Set response headers for proper PDF handling
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', pdfBuffer.length);
-    res.setHeader('Content-Disposition', preview === 'true' ? 'inline' : `attachment; filename="bill-${bill.id}.pdf"`);
+    res.setHeader('Content-Disposition', preview === 'true' ? 'inline' : `attachment; filename="bill-${bill._id || 'preview'}.pdf"`);
     res.setHeader('Cache-Control', 'no-cache');
     
     // Send the PDF buffer directly
