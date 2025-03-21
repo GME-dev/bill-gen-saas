@@ -10,13 +10,22 @@ const { Pool } = pg
 let db = null
 let connectionAttempts = 0
 const MAX_CONNECTION_ATTEMPTS = 5
+let isInitializing = false
 
 export async function initializeDatabase() {
+  // Prevent multiple simultaneous initialization attempts
+  if (isInitializing) {
+    console.log('Database initialization already in progress, waiting...')
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    return initializeDatabase()
+  }
+
   if (db) {
     console.log('Database already initialized')
     return db
   }
 
+  isInitializing = true
   connectionAttempts++
   console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
 
@@ -57,6 +66,7 @@ export async function initializeDatabase() {
         console.log('Database connection lost, will reconnect on next request')
         db = null
         connectionAttempts = 0
+        isInitializing = false
       }
     })
 
@@ -142,11 +152,12 @@ export async function initializeDatabase() {
         console.error('Error checking/adding is_ebicycle column:', error);
         throw error;
       }
+
+      isInitializing = false
+      return db
     } finally {
       client.release()
     }
-
-    return db
   } catch (error) {
     console.error('Error initializing database:', {
       message: error.message,
@@ -156,12 +167,17 @@ export async function initializeDatabase() {
       where: error.where
     })
     
+    db = null
+    isInitializing = false
+    
     if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
       console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`)
       throw error
     } else {
       console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
-      throw error // Throw error instead of returning null to prevent mock fallback
+      // Wait a bit before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      return initializeDatabase()
     }
   }
 }
@@ -222,7 +238,7 @@ let usingMockDb = false;
 
 export function getDatabase() {
   if (!db) {
-    throw new Error('Database not initialized. Call initializeDatabase() first.')
+    throw new Error('Database not initialized')
   }
   return db
 }

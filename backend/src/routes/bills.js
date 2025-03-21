@@ -1,5 +1,5 @@
 import express from 'express'
-import { getDatabase } from '../utils/database.js'
+import { getDatabase, initializeDatabase } from '../utils/database.js'
 import { generateBill } from '../utils/billGenerator.js'
 import { PDFGenerator } from '../utils/pdfGenerator.js'
 
@@ -11,6 +11,9 @@ const pdfGenerator = new PDFGenerator()
 async function repairAllCola5Bills() {
   try {
     console.log('🔧 STARTING GLOBAL DATABASE REPAIR FOR ALL COLA5 BILLS...');
+    
+    // Initialize database first
+    await initializeDatabase();
     const db = getDatabase();
     
     // Find all bills with COLA5 in model name
@@ -47,6 +50,20 @@ async function repairAllCola5Bills() {
 
 // Run the repair immediately
 repairAllCola5Bills();
+
+// Middleware to ensure database is initialized
+async function ensureDatabase(req, res, next) {
+  try {
+    await initializeDatabase();
+    next();
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    res.status(503).json({ error: 'Database unavailable' });
+  }
+}
+
+// Apply database middleware to all routes
+router.use(ensureDatabase);
 
 // Get all bills
 router.get('/', async (req, res) => {
