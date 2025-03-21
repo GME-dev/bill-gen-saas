@@ -244,7 +244,7 @@ export class PDFGenerator {
                 font: boldFont,
             })
 
-            const dateText = `Date: ${new Date(bill.bill_date).toLocaleDateString()}`
+            const dateText = `Date: ${this.formatDate(bill.bill_date)}`
             const dateWidth = font.widthOfTextAtSize(dateText, 12)
             page.drawText(dateText, {
                 x: width - this.margin - dateWidth,
@@ -380,7 +380,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['Bike Price', `${bikePrice.toLocaleString()}/=`],
+                ['Bike Price', this.formatAmount(bikePrice)],
                 font
             );
             
@@ -395,7 +395,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Advancement Amount', `${downPayment.toLocaleString()}/=`],
+                    ['Advancement Amount', this.formatAmount(downPayment)],
                     font
                 );
                 
@@ -404,7 +404,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Balance Amount', `${balanceAmount.toLocaleString()}/=`],
+                    ['Balance Amount', this.formatAmount(balanceAmount)],
                     font
                 );
                 
@@ -413,7 +413,7 @@ export class PDFGenerator {
                         page,
                         this.margin,
                         tableY,
-                        ['Estimated Delivery Date', new Date(bill.estimated_delivery_date).toLocaleDateString()],
+                        ['Estimated Delivery Date', this.formatDate(bill.estimated_delivery_date)],
                         font
                     );
                 }
@@ -422,7 +422,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Total Amount', `${bikePrice.toLocaleString()}/=`],
+                    ['Total Amount', this.formatAmount(bikePrice)],
                     boldFont,
                     12,
                     true
@@ -434,7 +434,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Down Payment', `${downPayment.toLocaleString()}/=`],
+                    ['Down Payment', this.formatAmount(downPayment)],
                     font
                 );
                 
@@ -453,7 +453,7 @@ export class PDFGenerator {
                     page,
                     this.margin,
                     tableY,
-                    ['Total Amount', `${downPayment.toLocaleString()}/= (D/P)`],
+                    ['Total Amount', this.formatAmount(downPayment)],
                     boldFont,
                     12,
                     true
@@ -477,7 +477,7 @@ export class PDFGenerator {
                         page,
                         this.margin,
                         tableY,
-                        ['Total Amount', `${totalAmount.toLocaleString()}/=`],
+                        ['Total Amount', this.formatAmount(totalAmount)],
                         boldFont,
                         12,
                         true
@@ -497,7 +497,7 @@ export class PDFGenerator {
                         page,
                         this.margin,
                         tableY,
-                        ['Total Amount', `${totalWithRMV.toLocaleString()}/=`],
+                        ['Total Amount', this.formatAmount(totalWithRMV)],
                         boldFont,
                         12,
                         true
@@ -529,7 +529,7 @@ export class PDFGenerator {
                 terms.push('4. Balance amount will be settled by the leasing company.');
             } else if (isAdvancement) {
                 terms.push('4. Balance amount must be paid upon delivery of the vehicle.');
-                terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
+                terms.push(`5. Estimated delivery date: ${this.formatDate(bill.estimated_delivery_date)}`);
             } 
             // Only add RMV registration term for non-e-bicycles
             else if (!isEbicycle) {
@@ -639,7 +639,7 @@ export class PDFGenerator {
         });
 
         // Date (right aligned)
-        const dateText = `Date: ${new Date(bill.bill_date).toLocaleDateString()}`;
+        const dateText = `Date: ${this.formatDate(bill.bill_date)}`;
         const dateWidth = font.widthOfTextAtSize(dateText, 12);
         page.drawText(dateText, {
             x: width - this.margin - dateWidth,
@@ -768,7 +768,7 @@ export class PDFGenerator {
             page,
             this.margin,
             tableY,
-            ['Bike Price', `${bikePrice.toLocaleString()}/=`],
+            ['Bike Price', this.formatAmount(bikePrice)],
             font
         );
 
@@ -778,7 +778,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['Advancement Amount', `${downPayment.toLocaleString()}/=`],
+                ['Advancement Amount', this.formatAmount(downPayment)],
                 font
             );
             
@@ -787,7 +787,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['Balance Amount', `${balanceAmount.toLocaleString()}/=`],
+                ['Balance Amount', this.formatAmount(balanceAmount)],
                 font
             );
         }
@@ -797,7 +797,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['Down Payment', `${downPayment.toLocaleString()}/=`],
+                ['Down Payment', this.formatAmount(downPayment)],
                 font
             );
             
@@ -805,7 +805,7 @@ export class PDFGenerator {
                 page,
                 this.margin,
                 tableY,
-                ['Total Amount', `${downPayment.toLocaleString()}/= (D/P)`],
+                ['Total Amount', this.formatAmount(downPayment)],
                 boldFont,
                 12,
                 true
@@ -820,7 +820,7 @@ export class PDFGenerator {
             page,
             this.margin,
             tableY,
-            ['Total Amount', `${bikePrice.toLocaleString()}/=`],
+            ['Total Amount', this.formatAmount(bikePrice)],
             boldFont,
             12,
             true
@@ -836,7 +836,7 @@ export class PDFGenerator {
 ****************************************************************************
 * FINISHING EMERGENCY PDF FOR BILL #${bill.id}                             *
 * Model: ${bill.model_name}                                                *
-* Total Amount forced to: ${parseFloat(bill.bike_price || 0).toLocaleString()}          *
+* Total Amount forced to: ${this.formatAmount(parseFloat(bill.bike_price || 0))}          *
 ****************************************************************************
 `);
         
@@ -865,7 +865,7 @@ export class PDFGenerator {
             terms.push('4. Balance amount will be settled by the leasing company.');
         } else if (billType === 'advance' || billType === 'advancement') {
             terms.push('4. Balance amount must be paid upon delivery of the vehicle.');
-            terms.push(`5. Estimated delivery date: ${bill.estimated_delivery_date ? new Date(bill.estimated_delivery_date).toLocaleDateString() : 'To be confirmed'}`);
+            terms.push(`5. Estimated delivery date: ${this.formatDate(bill.estimated_delivery_date)}`);
         }
         // For cash bills of e-bicycles - NO RMV mention
 
@@ -922,6 +922,18 @@ export class PDFGenerator {
 
         // Return the finished PDF
         return await pdfDoc.save();
+    }
+
+    // Fix date formatting to handle null/undefined values
+    formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleDateString();
+    }
+
+    // Add a helper method to format currency values
+    formatAmount(amount) {
+        if (amount === undefined || amount === null) return 'Rs. 0';
+        return `Rs. ${Number(amount).toLocaleString()}`;
     }
 }
 

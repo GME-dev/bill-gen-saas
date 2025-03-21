@@ -40,7 +40,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    // Handle errors here
+    // Special handling for invalid ObjectId errors (400 status)
+    if (error.response?.status === 400 && 
+        error.response?.data?.error?.includes('Invalid bill ID')) {
+      console.error('Invalid bill ID format:', error.response.data.error);
+      // We still reject the promise, but we handle it more gracefully
+      return Promise.reject(error);
+    }
+    
+    // Handle other errors
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }

@@ -33,6 +33,12 @@ router.get('/:id', async (req, res) => {
       return res.status(503).json({ error: 'Database connection not available' })
     }
     
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format: ${id}`)
+      return res.status(400).json({ error: 'Invalid bill ID format' })
+    }
+    
     const collection = db.collection('bills')
     const bill = await collection.findOne({ _id: new ObjectId(id) })
     
@@ -143,20 +149,27 @@ router.post('/', async (req, res) => {
 // Generate bill document (DOCX)
 router.get('/:id/generate', async (req, res) => {
   try {
+    const { id } = req.params
     const db = getDatabase()
     if (!db) {
       return res.status(503).json({ error: 'Database connection not available' })
     }
     
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format: ${id}`)
+      return res.status(400).json({ error: 'Invalid bill ID format' })
+    }
+    
     const collection = db.collection('bills')
-    const bill = await collection.findOne({ _id: new ObjectId(req.params.id) })
+    const bill = await collection.findOne({ _id: new ObjectId(id) })
     
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
     
     const itemsCollection = db.collection('bill_items')
-    const items = await itemsCollection.find({ bill_id: req.params.id }).toArray()
+    const items = await itemsCollection.find({ bill_id: id }).toArray()
     bill.items = items
     
     const docxBuffer = await generateBill(bill)
@@ -207,10 +220,16 @@ router.get('/:id/pdf', async (req, res) => {
         return res.status(503).json({ error: 'Database connection not available' })
       }
       
+      // Validate that the ID is a valid MongoDB ObjectId
+      if (!ObjectId.isValid(id)) {
+        console.log(`Invalid ObjectId format for PDF generation: ${id}`)
+        return res.status(400).json({ error: 'Invalid bill ID format' })
+      }
+      
       const billsCollection = db.collection('bills')
       const bikeModelsCollection = db.collection('bike_models')
       
-      const bill = await billsCollection.findOne({ _id: new ObjectId(id) })
+      bill = await billsCollection.findOne({ _id: new ObjectId(id) })
       if (!bill) {
         return res.status(404).json({ error: 'Bill not found' });
       }

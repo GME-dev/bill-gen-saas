@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Button, DatePicker, InputNumber, Switch, message } from 'antd';
+import { Form, Input, Select, Button, DatePicker, InputNumber, Switch, message, Modal } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../config/apiClient';
 import toast from 'react-hot-toast';
@@ -14,6 +14,9 @@ const BillGenerator = () => {
   const [billType, setBillType] = useState('cash');
   const [isAdvancePayment, setIsAdvancePayment] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchBikeModels();
@@ -66,42 +69,110 @@ const BillGenerator = () => {
     return bikePrice + 13000;
   };
 
-  const handleSubmit = async (values) => {
+  const handlePreview = async () => {
     try {
-      setLoading(true);
+      // Validate form first
+      await form.validateFields();
+      const values = form.getFieldsValue();
       
-      const billData = {
+      setPreviewLoading(true);
+      
+      // Safely format dates
+      const formattedValues = {
         ...values,
+        bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
+        estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null,
+        is_advance_payment: isAdvancePayment,
+        bill_type: billType
+      };
+      
+      // Prepare bill data with calculated fields
+      const billData = {
+        ...formattedValues,
         bill_number: generateBillNumber(),
         status: 'pending',
-        is_ebicycle: selectedModel?.is_ebicycle || false,
-        bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
-        estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null
+        is_ebicycle: selectedModel?.is_ebicycle || false
       };
 
       // Calculate total amount based on bill type and model
-      if (values.bill_type === 'cash') {
+      if (billType === 'cash') {
         billData.total_amount = selectedModel.is_ebicycle 
           ? values.bike_price 
-          : values.bike_price + 13000;
+          : parseFloat(values.bike_price) + 13000;
+        billData.rmv_charge = selectedModel.is_ebicycle ? 0 : 13000;
       } else {
-        billData.total_amount = values.down_payment;
+        billData.total_amount = parseFloat(values.down_payment || 0);
         billData.rmv_charge = 13500;
         billData.is_cpz = true;
       }
 
       // Handle advance payment
-      if (values.is_advance_payment) {
-        billData.balance_amount = billData.total_amount - values.advance_amount;
+      if (isAdvancePayment) {
+        billData.advance_amount = parseFloat(values.advance_amount || 0);
+        billData.balance_amount = billData.total_amount - billData.advance_amount;
+      }
+      
+      // Get the preview PDF
+      const response = await apiClient.get(
+        `/api/bills/preview/pdf?formData=${encodeURIComponent(JSON.stringify(billData))}`,
+        { responseType: 'blob' }
+      );
+      
+      // Create a blob URL for the preview
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      
+      setPreviewUrl(url);
+      setPreviewVisible(true);
+    } catch (error) {
+      console.error('Error generating preview:', error);
+      message.error('Failed to generate preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleSubmit = async (values) => {
+    try {
+      setLoading(true);
+      
+      // Ensure dates are properly formatted
+      const billData = {
+        ...values,
+        bill_number: generateBillNumber(),
+        status: 'pending',
+        is_ebicycle: selectedModel?.is_ebicycle || false,
+        is_advance_payment: isAdvancePayment,
+        bill_type: billType,
+        bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
+        estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null
+      };
+
+      // Calculate total amount based on bill type and model
+      if (billType === 'cash') {
+        billData.total_amount = selectedModel.is_ebicycle 
+          ? parseFloat(values.bike_price) 
+          : parseFloat(values.bike_price) + 13000;
+        billData.rmv_charge = selectedModel.is_ebicycle ? 0 : 13000;
+      } else {
+        billData.total_amount = parseFloat(values.down_payment || 0);
+        billData.rmv_charge = 13500;
+        billData.is_cpz = true;
       }
 
-      await apiClient.post('/api/bills', billData);
+      // Handle advance payment
+      if (isAdvancePayment) {
+        billData.advance_amount = parseFloat(values.advance_amount || 0);
+        billData.balance_amount = billData.total_amount - billData.advance_amount;
+      }
+
+      const response = await apiClient.post('/api/bills', billData);
       
-      message.success('Bill generated successfully');
-      navigate('/bills');
+      toast.success('Bill generated successfully');
+      navigate(`/bills/${response._id || response.id}`);
     } catch (error) {
       console.error('Error generating bill:', error);
-      message.error('Failed to generate bill');
+      toast.error('Failed to generate bill');
     } finally {
       setLoading(false);
     }
@@ -112,11 +183,10 @@ const BillGenerator = () => {
       <h1 className="text-2xl font-semibold mb-6">Generate New Bill</h1>
 
       {selectedModel?.is_ebicycle && (
-        <message.info
-          message="E-Bicycle Selected"
-          description="This is an e-bicycle model. Only cash sales are allowed, and no RMV charges apply."
-          className="mb-6"
-        />
+        <div className="bg-blue-50 p-4 mb-6 rounded border border-blue-200">
+          <h3 className="text-blue-800 font-medium">E-Bicycle Selected</h3>
+          <p className="text-blue-600 text-sm mt-1">This is an e-bicycle model. Only cash sales are allowed, and no RMV charges apply.</p>
+        </div>
       )}
 
       <Form
@@ -133,10 +203,11 @@ const BillGenerator = () => {
         <Form.Item
           name="model_name"
           label="Bike Model"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: 'Please select a bike model' }]}
         >
           <Select
             onChange={handleModelChange}
+            placeholder="Select bike model"
             options={bikeModels.map(model => ({
               label: `${model.model_name} - Rs. ${model.price.toLocaleString()}`,
               value: model.model_name
@@ -170,7 +241,7 @@ const BillGenerator = () => {
           <Form.Item
             name="down_payment"
             label="Down Payment"
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: 'Please enter the down payment amount' }]}
           >
             <InputNumber
               className="w-full"
@@ -184,7 +255,7 @@ const BillGenerator = () => {
           <Form.Item
             name="advance_amount"
             label="Advance Amount"
-            rules={[{ required: true }]}
+            rules={[{ required: true, message: 'Please enter the advance amount' }]}
           >
             <InputNumber
               className="w-full"
@@ -197,7 +268,7 @@ const BillGenerator = () => {
         <Form.Item
           name="customer_name"
           label="Customer Name"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: 'Please enter customer name' }]}
         >
           <Input />
         </Form.Item>
@@ -205,7 +276,7 @@ const BillGenerator = () => {
         <Form.Item
           name="customer_nic"
           label="Customer NIC"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: 'Please enter customer NIC' }]}
         >
           <Input />
         </Form.Item>
@@ -213,7 +284,7 @@ const BillGenerator = () => {
         <Form.Item
           name="customer_address"
           label="Customer Address"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: 'Please enter customer address' }]}
         >
           <Input.TextArea />
         </Form.Item>
@@ -221,7 +292,7 @@ const BillGenerator = () => {
         <Form.Item
           name="motor_number"
           label="Motor Number"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: 'Please enter motor number' }]}
         >
           <Input />
         </Form.Item>
@@ -229,17 +300,66 @@ const BillGenerator = () => {
         <Form.Item
           name="chassis_number"
           label="Chassis Number"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: 'Please enter chassis number' }]}
         >
           <Input />
         </Form.Item>
 
-        <Form.Item>
+        <Form.Item
+          name="bill_date"
+          label="Bill Date"
+        >
+          <DatePicker className="w-full" />
+        </Form.Item>
+
+        {isAdvancePayment && (
+          <Form.Item
+            name="estimated_delivery_date"
+            label="Estimated Delivery Date"
+          >
+            <DatePicker className="w-full" />
+          </Form.Item>
+        )}
+
+        <Form.Item className="flex justify-between">
+          <Button type="default" onClick={handlePreview} loading={previewLoading}>
+            Preview Bill
+          </Button>
           <Button type="primary" htmlType="submit" loading={loading}>
             Generate Bill
           </Button>
         </Form.Item>
       </Form>
+
+      {/* Preview Modal */}
+      <Modal
+        title="Bill Preview"
+        open={previewVisible}
+        onCancel={() => {
+          setPreviewVisible(false);
+          URL.revokeObjectURL(previewUrl);
+        }}
+        width={800}
+        footer={[
+          <Button key="back" onClick={() => {
+            setPreviewVisible(false);
+            URL.revokeObjectURL(previewUrl);
+          }}>
+            Close
+          </Button>,
+          <Button key="submit" type="primary" onClick={() => form.submit()}>
+            Generate Bill
+          </Button>,
+        ]}
+      >
+        <div className="h-[700px]">
+          <iframe 
+            src={previewUrl} 
+            title="Bill Preview" 
+            className="w-full h-full border-0"
+          />
+        </div>
+      </Modal>
     </div>
   );
 };

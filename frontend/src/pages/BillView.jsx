@@ -1,372 +1,372 @@
-import React, { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import axios from 'axios'
-import toast from 'react-hot-toast'
-import api from '../config/api'
-import AdvancementConversion from '../components/AdvancementConversion'
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Spin, Button, Badge, Descriptions, Card, Popconfirm, message, Alert, Tag, Modal } from 'antd';
+import { DownloadOutlined, DeleteOutlined, EditOutlined, PrinterOutlined, EyeOutlined } from '@ant-design/icons';
+import toast from 'react-hot-toast';
+import apiClient from '../config/apiClient';
+import AdvancementConversion from '../components/AdvancementConversion';
 
-export default function BillView() {
-  const { id } = useParams()
-  const navigate = useNavigate()
-  const [bill, setBill] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [downloading, setDownloading] = useState(false)
-  const [printing, setPrinting] = useState(false)
+const BillView = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [bill, setBill] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
-    fetchBill()
-  }, [id])
-
-  const fetchBill = async () => {
-    try {
-      setLoading(true)
-      const response = await api.get(`/bills/${id}`)
-      setBill(response.data)
-    } catch (error) {
-      toast.error('Failed to fetch bill')
-      console.error('Error fetching bill:', error)
-    } finally {
-      setLoading(false)
+    if (id) {
+      fetchBill(id);
     }
-  }
+  }, [id]);
+
+  const fetchBill = async (billId) => {
+    try {
+      setLoading(true);
+      const data = await apiClient.get(`/api/bills/${billId}`);
+      
+      // Ensure the bill has an id property (MongoDB uses _id)
+      if (data && data._id) {
+        data.id = data._id;
+      }
+      
+      setBill(data);
+    } catch (error) {
+      console.error('Error fetching bill:', error);
+      toast.error('Failed to fetch bill details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const getStatusBadgeClass = (status) => {
+    const statusMap = {
+      pending: 'processing',
+      completed: 'success',
+      cancelled: 'error',
+      converted: 'warning'
+    };
+    return statusMap[status?.toLowerCase()] || 'default';
+  };
+
+  const handleDeleteBill = async () => {
+    try {
+      await apiClient.delete(`/api/bills/${id}`);
+      toast.success('Bill deleted successfully');
+      navigate('/bills');
+    } catch (error) {
+      console.error('Error deleting bill:', error);
+      toast.error('Failed to delete bill');
+    }
+  };
 
   const handlePreviewPDF = async () => {
     try {
-      const response = await api.get(
-        `/bills/${id}/pdf?preview=true`,
-        { responseType: 'blob' }
-      );
+      setPreviewLoading(true);
+      const response = await apiClient.get(`/api/bills/${id}/pdf`, {
+        responseType: 'blob'
+      });
       
-      // Create blob URL and open in new window
       const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      const url = URL.createObjectURL(blob);
+      
+      setPreviewUrl(url);
+      setPreviewVisible(true);
     } catch (error) {
       console.error('Error previewing PDF:', error);
       toast.error('Failed to preview PDF');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
   const handleDownloadPDF = async () => {
     try {
-      setDownloading(true)
-      const response = await api.get(
-        `/bills/${id}/pdf`,
-        { responseType: 'blob' }
-      );
+      const response = await apiClient.get(`/api/bills/${id}/pdf`, {
+        responseType: 'blob'
+      });
       
-      // Create download link
       const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
+      const url = URL.createObjectURL(blob);
+      
       const link = document.createElement('a');
       link.href = url;
-      link.download = `bill-${id}.pdf`;
+      link.download = `Bill-${id}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading PDF:', error);
       toast.error('Failed to download PDF');
-    } finally {
-      setDownloading(false);
     }
   };
 
-  const handlePrintBill = async () => {
+  const handleConvertToLeasing = async () => {
     try {
-      setPrinting(true);
-      const response = await api.get(
-        `/bills/${id}/pdf`,
-        { responseType: 'blob' }
-      );
-      
-      // Create blob URL and open print dialog
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const printWindow = window.open(url, '_blank');
-      printWindow.onload = function() {
-        printWindow.print();
-      };
+      await apiClient.put(`/api/bills/${id}/convert-to-leasing`);
+      toast.success('Bill converted to leasing successfully');
+      fetchBill(id);
     } catch (error) {
-      console.error('Error printing bill:', error);
-      toast.error('Failed to print bill');
-    } finally {
-      setPrinting(false);
+      console.error('Error converting bill:', error);
+      toast.error('Failed to convert bill');
     }
   };
 
   const handleStatusChange = async (newStatus) => {
     try {
-      console.log(`Updating bill ${id} status to ${newStatus}`);
-      const response = await api.patch(`/bills/${id}`, { status: newStatus });
-      console.log('Status update response:', response.data);
-      fetchBill();
-      toast.success(`Bill status updated to ${newStatus}`);
+      await apiClient.put(`/api/bills/${id}/status`, { status: newStatus });
+      toast.success(`Bill marked as ${newStatus}`);
+      fetchBill(id);
     } catch (error) {
-      console.error('Error updating status:', error);
-      toast.error('Failed to update status: ' + error.message);
+      console.error('Error updating bill status:', error);
+      toast.error('Failed to update bill status');
     }
   };
 
-  const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
-      try {
-        await api.delete(`/bills/${id}`)
-        navigate('/bills')
-        toast.success('Bill deleted successfully')
-      } catch (error) {
-        console.error('Error deleting bill:', error)
-        toast.error('Failed to delete bill');
-      }
-    }
-  }
+  const getBillTypeTag = (type) => {
+    if (!type) return <Tag color="default">Unknown</Tag>;
+    
+    const typeMap = {
+      cash: { color: 'green', text: 'Cash' },
+      leasing: { color: 'blue', text: 'Leasing' },
+      advance: { color: 'orange', text: 'Advance Payment' },
+      advancement: { color: 'orange', text: 'Advance Payment' }
+    };
+    
+    const typeInfo = typeMap[type.toLowerCase()] || { color: 'default', text: type };
+    return <Tag color={typeInfo.color}>{typeInfo.text}</Tag>;
+  };
 
-  // Handle bill conversion completion
-  const handleConversionComplete = () => {
-    toast.success('Bill converted successfully')
-    fetchBill() // Refresh bill data
-  }
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString()
-  }
-
-  const getStatusBadgeClass = (status) => {
-    const baseClasses = 'px-3 py-1 text-sm font-medium rounded-full'
-    switch (status) {
-      case 'pending':
-        return `${baseClasses} bg-yellow-100 text-yellow-800`
-      case 'completed':
-        return `${baseClasses} bg-green-100 text-green-800`
-      case 'converted':
-        return `${baseClasses} bg-blue-100 text-blue-800`
-      case 'cancelled':
-        return `${baseClasses} bg-red-100 text-red-800`
-      default:
-        return `${baseClasses} bg-gray-100 text-gray-800`
-    }
-  }
+  const formatAmount = (amount) => {
+    if (amount === undefined || amount === null) return 'Rs. 0';
+    return `Rs. ${Number(amount).toLocaleString()}`;
+  };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex justify-center items-center h-screen">
+        <Spin size="large" />
       </div>
-    )
+    );
   }
 
   if (!bill) {
     return (
-      <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Bill not found</h2>
-        <p className="mt-2 text-gray-600">The bill you're looking for doesn't exist.</p>
-        <button
+      <div className="p-6">
+        <Alert
+          message="Bill not found"
+          description="The requested bill could not be found. It may have been deleted or the ID is incorrect."
+          type="error"
+          showIcon
+        />
+        <Button 
+          type="primary" 
           onClick={() => navigate('/bills')}
-          className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="mt-4"
         >
-          Back to Bills
-        </button>
+          Return to Bill List
+        </Button>
       </div>
-    )
+    );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Bill Details</h1>
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-semibold">Bill #{bill._id || bill.id}</h1>
+          <div className="flex items-center mt-2">
+            {getBillTypeTag(bill.bill_type)}
+            <Badge 
+              status={getStatusBadgeClass(bill.status)} 
+              text={bill.status} 
+              className="ml-2"
+            />
+          </div>
+        </div>
         <div className="flex space-x-2">
-          <button
-            onClick={() => navigate('/bills')}
-            className="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 flex items-center"
+          <Button 
+            icon={<EyeOutlined />}
+            onClick={handlePreviewPDF}
+            loading={previewLoading}
           >
-            <span className="mr-1">←</span>
-            Back to List
-          </button>
-        </div>
-      </div>
-
-      {/* Bill Details Card */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Bill #{bill.id}</h2>
-          <div className="flex items-center gap-3">
-            <span className={getStatusBadgeClass(bill.status)}>
-              {bill.status === 'completed' ? 'Completed' :
-              bill.status === 'converted' ? 'Converted' :
-              'Pending'}
-            </span>
-            
-            {bill.status === 'pending' && bill.bill_type !== 'advancement' && bill.bill_type !== 'advance' && (
-              <button
-                onClick={() => handleStatusChange('completed')}
-                className="px-3 py-1 text-sm font-medium bg-green-500 text-white rounded-md hover:bg-green-600 flex items-center"
-              >
-                <span className="mr-1">✓</span>
-                Mark as Completed
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-lg font-medium mb-3 pb-2 border-b">Customer Information</h3>
-            <div className="space-y-2">
-              <div>
-                <span className="text-gray-600">Name:</span>
-                <span className="ml-2 font-medium">{bill.customer_name}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">NIC:</span>
-                <span className="ml-2 font-medium">{bill.customer_nic}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Address:</span>
-                <span className="ml-2 font-medium">{bill.customer_address}</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-medium mb-3 pb-2 border-b">Vehicle Information</h3>
-            <div className="space-y-2">
-              <div>
-                <span className="text-gray-600">Model:</span>
-                <span className="ml-2 font-medium">{bill.model_name}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Motor Number:</span>
-                <span className="ml-2 font-medium">{bill.motor_number}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Chassis Number:</span>
-                <span className="ml-2 font-medium">{bill.chassis_number}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Price:</span>
-                <span className="ml-2 font-medium">Rs. {parseInt(bill.bike_price).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <h3 className="text-lg font-medium mb-3 pb-2 border-b">Payment Information</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <div>
-                <span className="text-gray-600">Bill Type:</span>
-                <span className="ml-2 font-medium capitalize">{bill.bill_type}</span>
-              </div>
-              <div>
-                <span className="text-gray-600">Bill Date:</span>
-                <span className="ml-2 font-medium">{new Date(bill.bill_date).toLocaleDateString()}</span>
-              </div>
-              
-              {bill.bill_type === 'leasing' && (
-                <div>
-                  <span className="text-gray-600">Down Payment:</span>
-                  <span className="ml-2 font-medium">Rs. {parseInt(bill.down_payment).toLocaleString()}</span>
-                </div>
-              )}
-
-              {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && (
-                <>
-                  <div>
-                    <span className="text-gray-600">Advancement Amount:</span>
-                    <span className="ml-2 font-medium">Rs. {(parseFloat(bill.down_payment) || 0).toLocaleString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Balance Due:</span>
-                    <span className="ml-2 font-medium">Rs. {
-                      ((parseFloat(bill.total_amount) || 0) - (parseFloat(bill.down_payment) || 0)).toLocaleString()
-                    }</span>
-                  </div>
-                  {bill.estimated_delivery_date && (
-                    <div>
-                      <span className="text-gray-600">Estimated Delivery:</span>
-                      <span className="ml-2 font-medium">{new Date(bill.estimated_delivery_date).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            
-            <div className="space-y-2">
-              <div className="text-lg">
-                <span className="text-gray-800 font-medium">Total Amount:</span>
-                <span className="ml-2 font-bold">Rs. {(parseFloat(bill.total_amount) || 0).toLocaleString()}</span>
-              </div>
-              
-              {bill.original_bill_id && (
-                <div>
-                  <span className="text-gray-600">Converted from Bill:</span>
-                  <a 
-                    href={`/bills/${bill.original_bill_id}`}
-                    className="ml-2 text-blue-600 hover:underline"
-                  >
-                    #{bill.original_bill_id}
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Advancement Bill Conversion */}
-        {(bill.bill_type === 'advancement' || bill.bill_type === 'advance') && bill.status === 'pending' && (
-          <div className="mt-6 p-4 border-t border-gray-200">
-            <h3 className="text-lg font-semibold mb-4">Advancement Bill Actions</h3>
-            <div className="flex flex-wrap gap-4">
-              <AdvancementConversion bill={bill} onConversionComplete={handleConversionComplete} />
-              
-              <button
-                onClick={() => handleStatusChange('completed')}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center"
-              >
-                <span className="mr-1">✓</span>
-                Mark as Completed
-              </button>
-            </div>
-            <p className="mt-2 text-sm text-gray-500">
-              Note: Convert to final bill if the customer is converting this to a cash or leasing purchase.
-              Mark as completed if the advancement was refunded or the deal was completed without a conversion.
-            </p>
-          </div>
-        )}
-
-        {/* Bill Actions */}
-        <div className="mt-8 flex flex-wrap justify-end gap-3">
-          <button
+            Preview
+          </Button>
+          <Button 
+            type="primary" 
+            icon={<DownloadOutlined />} 
             onClick={handleDownloadPDF}
-            disabled={downloading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center"
           >
-            <span className="mr-1">↓</span>
-            {downloading ? 'Downloading...' : 'Download PDF'}
-          </button>
-          
-          <button
-            onClick={handlePrintBill}
-            disabled={printing}
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 flex items-center"
+            Download PDF
+          </Button>
+          <Button 
+            icon={<PrinterOutlined />} 
+            onClick={() => {
+              handlePreviewPDF().then(() => {
+                setTimeout(() => {
+                  const printFrame = document.getElementById('pdf-preview-frame');
+                  if (printFrame) {
+                    printFrame.contentWindow.print();
+                  }
+                }, 1000);
+              });
+            }}
           >
-            <span className="mr-1">🖨️</span>
-            {printing ? 'Printing...' : 'Print Bill'}
-          </button>
-          
-          {bill.status !== 'converted' && (
-            <button
-              onClick={handleDelete}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 flex items-center"
+            Print
+          </Button>
+          <Button 
+            icon={<EditOutlined />} 
+            onClick={() => navigate(`/bills/${id}/edit`)}
+          >
+            Edit
+          </Button>
+          <Popconfirm
+            title="Are you sure you want to delete this bill?"
+            onConfirm={handleDeleteBill}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button 
+              danger 
+              icon={<DeleteOutlined />}
             >
-              <span className="mr-1">🗑️</span>
               Delete
-            </button>
-          )}
+            </Button>
+          </Popconfirm>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card title="Bill Details" className="mb-6">
+          <Descriptions bordered column={1}>
+            <Descriptions.Item label="Bill Number">{bill._id || bill.id}</Descriptions.Item>
+            <Descriptions.Item label="Bill Date">{formatDate(bill.bill_date)}</Descriptions.Item>
+            <Descriptions.Item label="Bill Type">{bill.bill_type}</Descriptions.Item>
+            <Descriptions.Item label="Status">{bill.status}</Descriptions.Item>
+            {bill.is_advance_payment && (
+              <Descriptions.Item label="Estimated Delivery Date">
+                {formatDate(bill.estimated_delivery_date)}
+              </Descriptions.Item>
+            )}
+          </Descriptions>
+        </Card>
+
+        <Card title="Customer Information" className="mb-6">
+          <Descriptions bordered column={1}>
+            <Descriptions.Item label="Name">{bill.customer_name}</Descriptions.Item>
+            <Descriptions.Item label="NIC">{bill.customer_nic}</Descriptions.Item>
+            <Descriptions.Item label="Address">{bill.customer_address}</Descriptions.Item>
+          </Descriptions>
+        </Card>
+
+        <Card title="Vehicle Information" className="mb-6">
+          <Descriptions bordered column={1}>
+            <Descriptions.Item label="Model">{bill.model_name}</Descriptions.Item>
+            <Descriptions.Item label="Type">{bill.is_ebicycle ? 'E-Bicycle' : 'Regular Bicycle'}</Descriptions.Item>
+            <Descriptions.Item label="Motor Number">{bill.motor_number}</Descriptions.Item>
+            <Descriptions.Item label="Chassis Number">{bill.chassis_number}</Descriptions.Item>
+          </Descriptions>
+        </Card>
+
+        <Card title="Payment Information" className="mb-6">
+          <Descriptions bordered column={1}>
+            <Descriptions.Item label="Bike Price">{formatAmount(bill.bike_price)}</Descriptions.Item>
+            <Descriptions.Item label="RMV Charge">{formatAmount(bill.rmv_charge)}</Descriptions.Item>
+            <Descriptions.Item label="Total Amount">{formatAmount(bill.total_amount)}</Descriptions.Item>
+            {bill.is_advance_payment && (
+              <>
+                <Descriptions.Item label="Advance Amount">{formatAmount(bill.advance_amount)}</Descriptions.Item>
+                <Descriptions.Item label="Balance Amount">{formatAmount(bill.balance_amount)}</Descriptions.Item>
+              </>
+            )}
+            {bill.bill_type === 'leasing' && (
+              <Descriptions.Item label="Down Payment">{formatAmount(bill.down_payment)}</Descriptions.Item>
+            )}
+          </Descriptions>
+        </Card>
+      </div>
+
+      <div className="mt-6 flex space-x-4">
+        {bill.status !== 'completed' && (
+          <Button
+            type="primary"
+            onClick={() => handleStatusChange('completed')}
+          >
+            Mark as Completed
+          </Button>
+        )}
+        
+        {bill.status !== 'cancelled' && (
+          <Button
+            danger
+            onClick={() => handleStatusChange('cancelled')}
+          >
+            Mark as Cancelled
+          </Button>
+        )}
+        
+        {bill.bill_type === 'cash' && bill.status !== 'converted' && !bill.is_ebicycle && (
+          <Popconfirm
+            title="Convert this cash bill to leasing?"
+            onConfirm={handleConvertToLeasing}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button>
+              Convert to Leasing
+            </Button>
+          </Popconfirm>
+        )}
+      </div>
+
+      <Modal
+        title="Bill Preview"
+        open={previewVisible}
+        onCancel={() => {
+          setPreviewVisible(false);
+          URL.revokeObjectURL(previewUrl);
+        }}
+        width={800}
+        footer={[
+          <Button key="back" onClick={() => {
+            setPreviewVisible(false);
+            URL.revokeObjectURL(previewUrl);
+          }}>
+            Close
+          </Button>,
+          <Button 
+            key="print" 
+            type="primary" 
+            icon={<PrinterOutlined />}
+            onClick={() => {
+              const printFrame = document.getElementById('pdf-preview-frame');
+              if (printFrame) {
+                printFrame.contentWindow.print();
+              }
+            }}
+          >
+            Print
+          </Button>,
+        ]}
+      >
+        <div className="h-[700px]">
+          <iframe 
+            id="pdf-preview-frame"
+            src={previewUrl} 
+            title="Bill Preview" 
+            className="w-full h-full border-0"
+          />
+        </div>
+      </Modal>
     </div>
-  )
-} 
+  );
+};
+
+export default BillView; 
