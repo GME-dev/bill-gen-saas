@@ -68,43 +68,38 @@ const BillView = () => {
 
   const handlePreviewPDF = async () => {
     try {
-      setPreviewLoading(true);
-      const response = await apiClient.get(`/api/bills/${id}/pdf`, {
-        responseType: 'blob'
-      });
+      setLoading(true);
+      const blob = await apiClient.get(`/api/bills/${id}/pdf?preview=true`);
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      // Create a blob URL and open it in a new window
       const url = URL.createObjectURL(blob);
-      
-      setPreviewUrl(url);
-      setPreviewVisible(true);
+      window.open(url, '_blank');
     } catch (error) {
       console.error('Error previewing PDF:', error);
       toast.error('Failed to preview PDF');
     } finally {
-      setPreviewLoading(false);
+      setLoading(false);
     }
   };
 
   const handleDownloadPDF = async () => {
     try {
-      const response = await apiClient.get(`/api/bills/${id}/pdf`, {
-        responseType: 'blob'
-      });
+      setLoading(true);
+      const blob = await apiClient.get(`/api/bills/${id}/pdf`);
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
+      // Create a download link
       const url = URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Bill-${id}.pdf`;
+      link.download = `bill-${id}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Error downloading PDF:', error);
       toast.error('Failed to download PDF');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -123,8 +118,18 @@ const BillView = () => {
     try {
       setLoading(true);
       
-      // Use the dedicated status update endpoint
-      const response = await apiClient.put(`/api/bills/${id}/status`, { status: newStatus });
+      // Try multiple endpoints to ensure compatibility
+      let response;
+      
+      try {
+        // Try the dedicated status endpoint first
+        response = await apiClient.put(`/api/bills/${id}/status`, { status: newStatus });
+      } catch (error) {
+        console.log('Status update endpoint failed, trying fallback', error);
+        
+        // Fallback to regular update
+        response = await apiClient.patch(`/api/bills/${id}`, { status: newStatus });
+      }
       
       if (response) {
         toast.success(`Bill status updated to ${newStatus}`);

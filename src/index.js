@@ -4,6 +4,7 @@ import { initializeDatabase } from './utils/database.js'
 import billsRouter from './routes/bills.js'
 import bikeModelsRouter from './routes/bike-models.js'
 import healthRouter from './routes/health.js'
+import billsRoutes from './routes/bills.js'
 
 const app = express()
 const port = process.env.PORT || 3000
@@ -31,6 +32,16 @@ initializeDatabase()
 app.use('/api/bills', billsRouter)
 app.use('/api/bike-models', bikeModelsRouter)
 app.use('/health', healthRouter)
+
+// Add direct PDF routes
+// Direct PDF routes
+app.get('/api/bills/:id/pdf', (req, res) => {
+  billsRoutes.handle(req, res);
+});
+
+app.get('/api/bills/preview/pdf', (req, res) => {
+  billsRoutes.handle(req, res);
+});
 
 // Start server
 app.listen(port, () => {

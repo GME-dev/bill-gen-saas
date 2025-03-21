@@ -331,11 +331,24 @@ router.get('/preview/pdf', async (req, res) => {
   }
 });
 
-// Update bill
+// Legacy support for status updates from client-side code that may not use /status endpoint
+// Status-only updates via the main update route
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
+    
+    // Check if this is just a status update
+    if (updateData && Object.keys(updateData).length === 1 && updateData.status) {
+      // Redirect to the status update endpoint
+      console.log(`Status-only update detected for bill ${id}, redirecting to status endpoint`);
+      return router.handle({ 
+        method: 'PUT', 
+        url: `/${id}/status`, 
+        body: { status: updateData.status },
+        params: { id }
+      }, res, () => {});
+    }
     
     // Validate that the ID is a valid MongoDB ObjectId
     if (!ObjectId.isValid(id)) {
@@ -413,8 +426,9 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// Fix the status update route
-router.put('/:id/status', async (req, res) => {
+// Ensure both PUT and PATCH routes exist for status updates
+// Add PATCH version of the status update endpoint
+router.patch('/:id/status', async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;

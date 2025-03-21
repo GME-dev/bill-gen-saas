@@ -38,39 +38,31 @@ const BillList = () => {
 
   const handlePreviewPDF = async (billId) => {
     try {
-      const response = await apiClient.get(`/api/bills/${billId}/pdf`, {
-        responseType: 'blob'
-      })
+      const blob = await apiClient.get(`/api/bills/${billId}/pdf?preview=true`);
       
-      const blob = new Blob([response.data], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      
-      window.open(url, '_blank')
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
     } catch (error) {
-      console.error('Error previewing PDF:', error)
-      toast.error('Failed to preview PDF')
+      console.error('Error previewing PDF:', error);
+      toast.error('Failed to preview PDF');
     }
   }
 
   const handleDownloadPDF = async (billId) => {
     try {
-      const response = await apiClient.get(`/api/bills/${billId}/pdf`, {
-        responseType: 'blob'
-      })
+      const blob = await apiClient.get(`/api/bills/${billId}/pdf`);
       
-      const blob = new Blob([response.data], { type: 'application/pdf' })
-      const url = URL.createObjectURL(blob)
-      
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `Bill-${billId}.pdf`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Bill-${billId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading PDF:', error)
-      toast.error('Failed to download PDF')
+      console.error('Error downloading PDF:', error);
+      toast.error('Failed to download PDF');
     }
   }
 

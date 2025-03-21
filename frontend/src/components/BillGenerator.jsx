@@ -72,35 +72,21 @@ const BillGenerator = () => {
     return bikePrice + 13000;
   };
 
-  const handlePreview = async () => {
+  const handlePreviewBill = async () => {
     try {
-      // Validate form first
-      await form.validateFields();
-      const values = form.getFieldsValue();
-      
       setPreviewLoading(true);
+      const values = await form.validateFields();
       
-      // Get the selected model's price if bike_price is missing
-      const bikePrice = values.bike_price || (selectedModel ? selectedModel.price : 0);
-      
-      // Safely format dates
-      const formattedValues = {
-        ...values,
-        bike_price: bikePrice,
-        bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
-        estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null,
-        is_advance_payment: isAdvancePayment,
-        bill_type: billType
-      };
-      
-      // Prepare bill data with calculated fields
+      // Prepare bill data for preview
       const billData = {
-        ...formattedValues,
-        bill_number: generateBillNumber(),
-        status: 'pending',
-        is_ebicycle: selectedModel?.is_ebicycle || false
+        ...values,
+        bill_type: billType.toUpperCase(),
+        is_ebicycle: selectedModel?.is_ebicycle || false,
+        can_be_leased: selectedModel?.can_be_leased || true
       };
-
+      
+      const bikePrice = values.bike_price || 0;
+      
       // Calculate total amount based on bill type and model
       if (billType === 'cash') {
         billData.total_amount = selectedModel?.is_ebicycle 
@@ -120,13 +106,11 @@ const BillGenerator = () => {
       }
       
       // Get the preview PDF
-      const response = await apiClient.get(
-        `/api/bills/preview/pdf?formData=${encodeURIComponent(JSON.stringify(billData))}`,
-        { responseType: 'blob' }
+      const blob = await apiClient.get(
+        `/api/bills/preview/pdf?formData=${encodeURIComponent(JSON.stringify(billData))}`
       );
       
       // Create a blob URL for the preview
-      const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       
       setPreviewUrl(url);
@@ -284,8 +268,15 @@ const BillGenerator = () => {
           >
             <InputNumber
               className="w-full"
+              min={1}
+              step={1}
               formatter={value => `Rs. ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-              parser={value => value.replace(/[^\d.]/g, '')}
+              parser={value => {
+                // Clean the input value from non-numeric characters
+                const cleanValue = value.replace(/[^\d]/g, '');
+                // Return a number, or 1 if empty
+                return cleanValue ? parseInt(cleanValue, 10) : 1;
+              }}
             />
           </Form.Item>
         )}
@@ -347,7 +338,7 @@ const BillGenerator = () => {
         )}
 
         <Form.Item className="flex justify-between">
-          <Button type="default" onClick={handlePreview} loading={previewLoading}>
+          <Button type="default" onClick={handlePreviewBill} loading={previewLoading}>
             Preview Bill
           </Button>
           <Button type="primary" htmlType="submit" loading={loading}>

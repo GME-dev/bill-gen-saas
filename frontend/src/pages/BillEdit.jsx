@@ -238,8 +238,15 @@ const BillEdit = () => {
             >
               <InputNumber
                 className="w-full"
+                min={1}
+                step={1}
                 formatter={value => `Rs. ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={value => value.replace(/[^\d.]/g, '')}
+                parser={value => {
+                  // Clean the input value from non-numeric characters
+                  const cleanValue = value.replace(/[^\d]/g, '');
+                  // Return a number, or 1 if empty
+                  return cleanValue ? parseInt(cleanValue, 10) : 1;
+                }}
               />
             </Form.Item>
           )}

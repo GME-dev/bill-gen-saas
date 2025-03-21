@@ -1,57 +1,121 @@
 import axios from 'axios';
 
-// Get API URL from environment variable
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+class ApiClient {
+  constructor() {
+    this.baseURL = import.meta.env.VITE_API_URL || '/api';
+    
+    console.log('Using API URL:', this.baseURL);
+    
+    this.axiosInstance = axios.create({
+      baseURL: this.baseURL,
+      timeout: 30000,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  }
+  
+  getFullUrl(url) {
+    // Replace any double slashes except after http: or https:
+    return `${this.baseURL}${url}`.replace(/([^:])\/\//g, '$1/');
+  }
+  
+  getHeaders() {
+    return {
+      'Content-Type': 'application/json'
+    };
+  }
 
-// Log the API URL to help with debugging
-console.log('Using API URL:', apiUrl);
-
-// Remove trailing slash if present to avoid path issues
-const baseURL = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
-
-// Create the axios client instance
-const apiClient = axios.create({
-  baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add a request interceptor to modify request paths if needed
-apiClient.interceptors.request.use(
-  (config) => {
-    // Check if the URL already contains /api to avoid duplication
-    if (config.url.startsWith('/api/')) {
-      // If the baseURL already ends with /api, remove it from the request URL
-      if (baseURL.endsWith('/api')) {
-        config.url = config.url.replace('/api/', '/');
+  async get(url, config = {}) {
+    // Special handling for PDF endpoints
+    if (url.includes('/pdf')) {
+      console.log('PDF request detected:', url);
+      
+      try {
+        // Use fetch API for PDF requests
+        const response = await fetch(this.getFullUrl(url), {
+          method: 'GET',
+          headers: this.getHeaders(),
+          ...config
+        });
+        
+        if (!response.ok) {
+          throw new Error(`PDF request failed with status ${response.status}`);
+        }
+        
+        // Return the blob for preview/download
+        return await response.blob();
+      } catch (error) {
+        console.error('Error fetching PDF:', error);
+        throw error;
       }
     }
-    
-    console.log('API Request:', config.method, config.url);
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
 
-// Add a response interceptor for error handling
-apiClient.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    // Special handling for invalid ObjectId errors (400 status)
-    if (error.response?.status === 400 && 
-        error.response?.data?.error?.includes('Invalid bill ID')) {
-      console.error('Invalid bill ID format:', error.response.data.error);
-      // We still reject the promise, but we handle it more gracefully
-      return Promise.reject(error);
+    // Regular API request
+    try {
+      const response = await this.axiosInstance.get(url, config);
+      return response.data;
+    } catch (error) {
+      this._handleError(error);
+      throw error;
     }
-    
-    // Handle other errors
-    console.error('API Error:', error.response?.data || error.message);
-    return Promise.reject(error);
   }
-);
+
+  async post(url, data, config = {}) {
+    try {
+      const response = await this.axiosInstance.post(url, data, config);
+      return response.data;
+    } catch (error) {
+      this._handleError(error);
+      throw error;
+    }
+  }
+
+  async put(url, data, config = {}) {
+    try {
+      const response = await this.axiosInstance.put(url, data, config);
+      return response.data;
+    } catch (error) {
+      this._handleError(error);
+      throw error;
+    }
+  }
+  
+  async patch(url, data, config = {}) {
+    try {
+      const response = await this.axiosInstance.patch(url, data, config);
+      return response.data;
+    } catch (error) {
+      this._handleError(error);
+      throw error;
+    }
+  }
+
+  async delete(url, config = {}) {
+    try {
+      const response = await this.axiosInstance.delete(url, config);
+      return response.data;
+    } catch (error) {
+      this._handleError(error);
+      throw error;
+    }
+  }
+
+  _handleError(error) {
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      // that falls out of the range of 2xx
+      console.error('API Error:', error.response.data);
+    } else if (error.request) {
+      // The request was made but no response was received
+      console.error('API Error: No response received');
+    } else {
+      // Something happened in setting up the request that triggered an Error
+      console.error('API Error:', error.message);
+    }
+  }
+}
+
+const apiClient = new ApiClient();
 
 export default apiClient; 
