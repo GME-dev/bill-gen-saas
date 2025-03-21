@@ -2,7 +2,8 @@ import axios from 'axios';
 
 class ApiClient {
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_URL || '/api';
+    // Set the base URL without a trailing slash
+    this.baseURL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
     
     console.log('Using API URL:', this.baseURL);
     
@@ -16,8 +17,17 @@ class ApiClient {
   }
   
   getFullUrl(url) {
-    // Replace any double slashes except after http: or https:
-    return `${this.baseURL}${url}`.replace(/([^:])\/\//g, '$1/');
+    // Ensure url starts with a slash
+    const urlWithSlash = url.startsWith('/') ? url : `/${url}`;
+    
+    // Check if the URL already includes the baseURL path
+    if (this.baseURL.endsWith('/api') && urlWithSlash.startsWith('/api/')) {
+      // Remove the duplicate /api prefix
+      return `${this.baseURL}${urlWithSlash.substring(4)}`;
+    }
+    
+    // Regular path joining with baseURL
+    return `${this.baseURL}${urlWithSlash}`;
   }
   
   getHeaders() {

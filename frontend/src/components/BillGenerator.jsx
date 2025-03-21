@@ -24,7 +24,7 @@ const BillGenerator = () => {
 
   const fetchBikeModels = async () => {
     try {
-      const data = await apiClient.get('/api/bike-models');
+      const data = await apiClient.get('/bike-models');
       setBikeModels(data);
     } catch (error) {
       console.error('Error fetching bike models:', error);

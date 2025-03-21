@@ -18,7 +18,7 @@ const BillList = () => {
   const fetchBills = async () => {
     try {
       setLoading(true)
-      const data = await apiClient.get('/api/bills')
+      const data = await apiClient.get('/bills')
       
       if (!Array.isArray(data)) {
         console.error('Invalid response format from API:', data)
@@ -46,7 +46,7 @@ const BillList = () => {
 
   const handlePreviewPDF = async (billId) => {
     try {
-      const blob = await apiClient.get(`/api/bills/${billId}/pdf?preview=true`);
+      const blob = await apiClient.get(`/bills/${billId}/pdf?preview=true`);
       
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
@@ -58,7 +58,7 @@ const BillList = () => {
 
   const handleDownloadPDF = async (billId) => {
     try {
-      const blob = await apiClient.get(`/api/bills/${billId}/pdf`);
+      const blob = await apiClient.get(`/bills/${billId}/pdf`);
       
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -81,7 +81,7 @@ const BillList = () => {
 
     try {
       setLoading(true)
-      await apiClient.delete(`/api/bills/${billId}`)
+      await apiClient.delete(`/bills/${billId}`)
       toast.success('Bill deleted successfully')
       fetchBills()
     } catch (error) {
@@ -109,7 +109,7 @@ const BillList = () => {
 
   const handleStatusChange = async (billId, newStatus) => {
     try {
-      await apiClient.put(`/api/bills/${billId}/status`, { status: newStatus });
+      await apiClient.patch(`/bills/${billId}`, { status: newStatus })
       toast.success(`Bill marked as ${newStatus}`);
       fetchBills();
     } catch (error) {
@@ -120,11 +120,10 @@ const BillList = () => {
 
   const handleExportToExcel = async () => {
     try {
-      const response = await apiClient.get('/api/bills/export/excel', {
+      const blob = await apiClient.get('/bills/export', {
         responseType: 'blob'
-      });
+      })
       
-      const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = URL.createObjectURL(blob);
       
       const link = document.createElement('a');

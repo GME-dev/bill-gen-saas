@@ -24,7 +24,7 @@ const BillView = () => {
   const fetchBill = async (billId) => {
     try {
       setLoading(true);
-      const data = await apiClient.get(`/api/bills/${billId}`);
+      const data = await apiClient.get(`/bills/${billId}`);
       
       // Ensure the bill has an id property (MongoDB uses _id)
       if (data && data._id) {
@@ -57,19 +57,22 @@ const BillView = () => {
 
   const handleDeleteBill = async () => {
     try {
-      await apiClient.delete(`/api/bills/${id}`);
+      setLoading(true);
+      await apiClient.delete(`/bills/${id}`);
       toast.success('Bill deleted successfully');
       navigate('/bills');
     } catch (error) {
       console.error('Error deleting bill:', error);
-      toast.error('Failed to delete bill');
+      toast.error(`Failed to delete bill: ${error.message || 'Server error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handlePreviewPDF = async () => {
     try {
       setPreviewLoading(true);
-      const blob = await apiClient.get(`/api/bills/${id}/pdf?preview=true`);
+      const blob = await apiClient.get(`/bills/${id}/pdf?preview=true`);
       
       if (!blob || !(blob instanceof Blob)) {
         throw new Error('Invalid response from server');
@@ -89,7 +92,7 @@ const BillView = () => {
   const handleDownloadPDF = async () => {
     try {
       setLoading(true);
-      const blob = await apiClient.get(`/api/bills/${id}/pdf`);
+      const blob = await apiClient.get(`/bills/${id}/pdf`);
       
       if (!blob || !(blob instanceof Blob)) {
         throw new Error('Invalid response from server');
@@ -116,7 +119,9 @@ const BillView = () => {
 
   const handleConvertToLeasing = async () => {
     try {
-      await apiClient.put(`/api/bills/${id}/convert-to-leasing`);
+      await apiClient.put(`/bills/${bill.id}/convert-to-leasing`, {
+        // ... existing code ...
+      });
       toast.success('Bill converted to leasing successfully');
       fetchBill(id);
     } catch (error) {
@@ -127,34 +132,16 @@ const BillView = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      setLoading(true);
-      
-      // Try multiple endpoints to ensure compatibility
-      let response;
-      
-      try {
-        // Try the dedicated status endpoint first
-        response = await apiClient.put(`/api/bills/${id}/status`, { status: newStatus });
-      } catch (error) {
-        console.log('Status update endpoint failed, trying fallback', error);
-        
-        // Fallback to regular update
-        response = await apiClient.patch(`/api/bills/${id}`, { status: newStatus });
-      }
-      
-      if (response) {
-        toast.success(`Bill status updated to ${newStatus}`);
-        setBill({
-          ...bill,
-          status: newStatus,
-          updated_at: new Date().toISOString()
-        });
-      }
+      await apiClient.patch(`/bills/${id}`, { status: newStatus });
+      toast.success(`Bill status updated to ${newStatus}`);
+      setBill({
+        ...bill,
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      });
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update status');
-    } finally {
-      setLoading(false);
     }
   };
 
