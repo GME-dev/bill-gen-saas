@@ -2,10 +2,19 @@ import axios from 'axios';
 
 class ApiClient {
   constructor() {
-    // Set the base URL without a trailing slash
-    this.baseURL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+    // Get the base URL from environment or use a relative path
+    let baseURL = import.meta.env.VITE_API_URL || '/api';
     
-    console.log('Using API URL:', this.baseURL);
+    // Remove trailing slash if present
+    baseURL = baseURL.replace(/\/$/, '');
+    
+    // Store if the baseURL already includes /api
+    this.baseURLHasApiPrefix = baseURL.endsWith('/api');
+    
+    console.log('Using API URL:', baseURL);
+    console.log('Base URL has /api prefix:', this.baseURLHasApiPrefix);
+    
+    this.baseURL = baseURL;
     
     this.axiosInstance = axios.create({
       baseURL: this.baseURL,
@@ -20,9 +29,8 @@ class ApiClient {
     // Ensure url starts with a slash
     const urlWithSlash = url.startsWith('/') ? url : `/${url}`;
     
-    // Check if the URL already includes the baseURL path
-    if (this.baseURL.endsWith('/api') && urlWithSlash.startsWith('/api/')) {
-      // Remove the duplicate /api prefix
+    // If URL starts with /api/ and baseURL already ends with /api, remove the duplicate prefix
+    if (this.baseURLHasApiPrefix && urlWithSlash.startsWith('/api/')) {
       return `${this.baseURL}${urlWithSlash.substring(4)}`;
     }
     
@@ -37,13 +45,18 @@ class ApiClient {
   }
 
   async get(url, config = {}) {
+    // Remove any /api prefix from URL if baseURL already has it
+    const processedUrl = this.baseURLHasApiPrefix && url.startsWith('/api/') 
+      ? url.substring(4) 
+      : url;
+    
     // Special handling for PDF endpoints
-    if (url.includes('/pdf')) {
-      console.log('PDF request detected:', url);
+    if (processedUrl.includes('/pdf')) {
+      console.log('PDF request detected:', processedUrl);
       
       try {
         // Use fetch API for PDF requests
-        const response = await fetch(this.getFullUrl(url), {
+        const response = await fetch(this.getFullUrl(processedUrl), {
           method: 'GET',
           headers: this.getHeaders(),
           ...config
@@ -73,7 +86,7 @@ class ApiClient {
 
     // Regular API request
     try {
-      const response = await this.axiosInstance.get(url, config);
+      const response = await this.axiosInstance.get(processedUrl, config);
       return response.data;
     } catch (error) {
       this._handleError(error);
@@ -82,8 +95,13 @@ class ApiClient {
   }
 
   async post(url, data, config = {}) {
+    // Remove any /api prefix from URL if baseURL already has it
+    const processedUrl = this.baseURLHasApiPrefix && url.startsWith('/api/') 
+      ? url.substring(4) 
+      : url;
+    
     try {
-      const response = await this.axiosInstance.post(url, data, config);
+      const response = await this.axiosInstance.post(processedUrl, data, config);
       return response.data;
     } catch (error) {
       this._handleError(error);
@@ -92,8 +110,13 @@ class ApiClient {
   }
 
   async put(url, data, config = {}) {
+    // Remove any /api prefix from URL if baseURL already has it
+    const processedUrl = this.baseURLHasApiPrefix && url.startsWith('/api/') 
+      ? url.substring(4) 
+      : url;
+    
     try {
-      const response = await this.axiosInstance.put(url, data, config);
+      const response = await this.axiosInstance.put(processedUrl, data, config);
       return response.data;
     } catch (error) {
       this._handleError(error);
@@ -102,8 +125,13 @@ class ApiClient {
   }
   
   async patch(url, data, config = {}) {
+    // Remove any /api prefix from URL if baseURL already has it
+    const processedUrl = this.baseURLHasApiPrefix && url.startsWith('/api/') 
+      ? url.substring(4) 
+      : url;
+    
     try {
-      const response = await this.axiosInstance.patch(url, data, config);
+      const response = await this.axiosInstance.patch(processedUrl, data, config);
       return response.data;
     } catch (error) {
       this._handleError(error);
@@ -112,8 +140,13 @@ class ApiClient {
   }
 
   async delete(url, config = {}) {
+    // Remove any /api prefix from URL if baseURL already has it
+    const processedUrl = this.baseURLHasApiPrefix && url.startsWith('/api/') 
+      ? url.substring(4) 
+      : url;
+    
     try {
-      const response = await this.axiosInstance.delete(url, config);
+      const response = await this.axiosInstance.delete(processedUrl, config);
       return response.data;
     } catch (error) {
       this._handleError(error);

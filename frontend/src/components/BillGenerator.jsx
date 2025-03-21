@@ -111,7 +111,7 @@ const BillGenerator = () => {
       
       // Get the preview PDF
       const blob = await apiClient.get(
-        `/api/bills/preview/pdf?formData=${encodeURIComponent(JSON.stringify(billData))}`
+        `/bills/preview/pdf?formData=${encodeURIComponent(JSON.stringify(billData))}`
       );
       
       // Create a blob URL for the preview
@@ -182,7 +182,7 @@ const BillGenerator = () => {
         }
       }
 
-      const response = await apiClient.post('/api/bills', billData);
+      const response = await apiClient.post('/bills', billData);
       
       toast.success('Bill generated successfully');
       navigate(`/bills/${response._id || response.id}`);
