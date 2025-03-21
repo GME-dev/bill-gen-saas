@@ -17,6 +17,7 @@ const BillGenerator = () => {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [bikePrice, setBikePrice] = useState(0);
 
   useEffect(() => {
     fetchBikeModels();
@@ -32,17 +33,28 @@ const BillGenerator = () => {
     }
   };
 
-  const handleModelChange = (value) => {
-    const model = bikeModels.find(m => m.model_name === value);
-    setSelectedModel(model);
+  const handleModelChange = async (modelName) => {
+    if (!modelName) return;
     
-    if (model && model.price) {
-      // Parse the price to ensure it's a number
-      const bikePrice = parseFloat(model.price);
-      if (!isNaN(bikePrice)) {
-        form.setFieldsValue({
-          bike_price: bikePrice
-        });
+    // Find the selected model from the models list
+    const model = bikeModels.find(model => model.model_name === modelName);
+    
+    if (model) {
+      setSelectedModel(model);
+      
+      // Update the form with the model price
+      form.setFieldsValue({
+        bike_price: model.price,
+      });
+      
+      // If it's an e-bicycle, enforce cash bill type
+      if (model.is_ebicycle) {
+        setBillType('cash');
+        // Set price field
+        setBikePrice(model.price);
+      } else {
+        // Regular e-bike
+        setBikePrice(model.price);
       }
     }
   };
@@ -131,24 +143,25 @@ const BillGenerator = () => {
     try {
       setLoading(true);
       
-      // Get the selected model's price if bike_price is missing
-      let bikePrice = values.bike_price || 0;
-      
-      if (!bikePrice && selectedModel && selectedModel.price) {
-        bikePrice = parseFloat(selectedModel.price);
+      // Check if a model was selected
+      if (!selectedModel) {
+        toast.error('Please select a bike model');
+        return;
       }
       
-      // Ensure price is a valid number
-      bikePrice = parseFloat(bikePrice);
-      if (isNaN(bikePrice)) bikePrice = 0;
+      // Ensure bike price is set properly
+      const modelPrice = selectedModel.price || 0;
+      if (!values.bike_price || values.bike_price !== modelPrice) {
+        values.bike_price = modelPrice;
+      }
       
-      // Ensure dates are properly formatted
+      // Create the bill data
       const billData = {
         ...values,
-        bike_price: bikePrice,
         bill_number: generateBillNumber(),
+        bike_price: modelPrice,
         status: 'pending',
-        is_ebicycle: selectedModel?.is_ebicycle || false,
+        is_ebicycle: selectedModel.is_ebicycle || false,
         is_advance_payment: isAdvancePayment,
         bill_type: billType,
         bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
@@ -157,14 +170,14 @@ const BillGenerator = () => {
 
       // Calculate total amount based on bill type and model
       if (billType === 'cash') {
-        billData.total_amount = selectedModel?.is_ebicycle 
-          ? parseFloat(bikePrice) 
-          : parseFloat(bikePrice) + 13000;
-        billData.rmv_charge = selectedModel?.is_ebicycle ? 0 : 13000;
+        billData.total_amount = selectedModel.is_ebicycle 
+          ? modelPrice 
+          : modelPrice + 13000;
+        billData.rmv_charge = selectedModel.is_ebicycle ? 0 : 13000;
       } else {
         // For leasing, ensure down_payment is properly set
         const downPayment = parseFloat(values.down_payment || 0);
-        billData.total_amount = selectedModel?.price || bikePrice; // Store the full bike price
+        billData.total_amount = modelPrice; // Store the full bike price
         billData.down_payment = downPayment;
         billData.rmv_charge = 13500;
         billData.is_cpz = true;
@@ -182,6 +195,8 @@ const BillGenerator = () => {
         }
       }
 
+      console.log('Submitting bill data:', billData);
+      
       const response = await apiClient.post('/bills', billData);
       
       toast.success('Bill generated successfully');

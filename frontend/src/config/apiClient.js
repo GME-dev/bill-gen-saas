@@ -55,7 +55,19 @@ class ApiClient {
       console.log('PDF request detected:', processedUrl);
       
       try {
-        // Use fetch API for PDF requests
+        // Check if using axios or fetch
+        if (config.responseType === 'blob' || config.responseType === 'arraybuffer') {
+          // Use axios for blob responses with proper responseType
+          console.log('Using axios for PDF with responseType:', config.responseType);
+          const response = await this.axiosInstance.get(processedUrl, {
+            ...config,
+            responseType: config.responseType || 'blob'
+          });
+          return response.data;
+        }
+        
+        // Fallback to fetch API for PDF requests if no responseType specified
+        console.log('Using fetch API for PDF request');
         const response = await fetch(this.getFullUrl(processedUrl), {
           method: 'GET',
           headers: this.getHeaders(),

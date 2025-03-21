@@ -935,10 +935,23 @@ export class PDFGenerator {
         return await pdfDoc.save();
     }
 
-    // Fix date formatting to handle null/undefined values
+    // Format a date in a readable format
     formatDate(dateString) {
         if (!dateString) return 'N/A';
-        return new Date(dateString).toLocaleDateString();
+        
+        try {
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'N/A';
+            
+            return date.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        } catch (error) {
+            console.error('Error formatting date:', error);
+            return 'N/A';
+        }
     }
 
     // Add a helper method to format currency values

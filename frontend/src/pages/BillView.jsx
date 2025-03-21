@@ -72,18 +72,31 @@ const BillView = () => {
   const handlePreviewPDF = async () => {
     try {
       setPreviewLoading(true);
-      const blob = await apiClient.get(`/bills/${id}/pdf?preview=true`);
+      // Log the request for debugging
+      console.log(`Requesting PDF preview for bill: ${id}`);
       
-      if (!blob || !(blob instanceof Blob)) {
-        throw new Error('Invalid response from server');
+      try {
+        const blob = await apiClient.get(`/bills/${id}/pdf?preview=true`, {
+          responseType: 'blob'
+        });
+        
+        if (!blob || !(blob instanceof Blob)) {
+          throw new Error('Invalid response from server');
+        }
+        
+        // Create a blob URL and open it in a new window
+        const url = URL.createObjectURL(blob);
+        setPreviewUrl(url);
+        setPreviewVisible(true);
+        
+        // Also open in a new tab for better viewing
+        window.open(url, '_blank');
+        return url;
+      } catch (error) {
+        console.error('Error previewing PDF:', error);
+        toast.error(`Failed to preview PDF: ${error.message || 'Server error'}`);
+        throw error;
       }
-      
-      // Create a blob URL and open it in a new window
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-    } catch (error) {
-      console.error('Error previewing PDF:', error);
-      toast.error(`Failed to preview PDF: ${error.message || 'Server error'}`);
     } finally {
       setPreviewLoading(false);
     }
@@ -92,7 +105,12 @@ const BillView = () => {
   const handleDownloadPDF = async () => {
     try {
       setLoading(true);
-      const blob = await apiClient.get(`/bills/${id}/pdf`);
+      // Log the request for debugging
+      console.log(`Requesting PDF download for bill: ${id}`);
+      
+      const blob = await apiClient.get(`/bills/${id}/pdf`, {
+        responseType: 'blob'
+      });
       
       if (!blob || !(blob instanceof Blob)) {
         throw new Error('Invalid response from server');
@@ -132,8 +150,15 @@ const BillView = () => {
 
   const handleStatusChange = async (newStatus) => {
     try {
-      await apiClient.patch(`/bills/${id}`, { status: newStatus });
+      setLoading(true);
+      // Log the request for debugging
+      console.log(`Updating bill ${id} status to ${newStatus}`);
+      
+      // Use the specific status endpoint
+      await apiClient.patch(`/bills/${id}/status`, { status: newStatus });
       toast.success(`Bill status updated to ${newStatus}`);
+      
+      // Update the local bill object
       setBill({
         ...bill,
         status: newStatus,
@@ -141,7 +166,9 @@ const BillView = () => {
       });
     } catch (error) {
       console.error('Error updating status:', error);
-      toast.error('Failed to update status');
+      toast.error(`Failed to update status: ${error.message || 'Server error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
