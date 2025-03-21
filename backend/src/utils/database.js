@@ -12,13 +12,6 @@ let connectionAttempts = 0
 const MAX_CONNECTION_ATTEMPTS = 5
 
 export async function initializeDatabase() {
-  // Check if we should use mock DB
-  if (process.env.USE_MOCK_DB === 'true') {
-    console.log('Using mock database as USE_MOCK_DB is set to true')
-    usingMockDb = true
-    return mockPool
-  }
-
   if (db) {
     console.log('Database already initialized')
     return db
@@ -38,15 +31,13 @@ export async function initializeDatabase() {
     const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
     console.log(`Using database connection: ${maskedString}`)
 
-    // For pooled connections, we need to trust the certificate
-    const sslConfig = {
-      rejectUnauthorized: false // Required for Supabase pooled connections
-    }
-
     // Create the connection pool with minimal configuration
     const config = {
       connectionString,
-      ssl: sslConfig,
+      // For Supabase pooled connections, we need to trust their certificate chain
+      ssl: {
+        rejectUnauthorized: false
+      },
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000
@@ -149,6 +140,7 @@ export async function initializeDatabase() {
         }
       } catch (error) {
         console.error('Error checking/adding is_ebicycle column:', error);
+        throw error;
       }
     } finally {
       client.release()
@@ -169,7 +161,7 @@ export async function initializeDatabase() {
       throw error
     } else {
       console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
-      return null
+      throw error // Throw error instead of returning null to prevent mock fallback
     }
   }
 }
@@ -229,19 +221,10 @@ const mockPool = {
 let usingMockDb = false;
 
 export function getDatabase() {
-  if (usingMockDb) {
-    console.log('Using mock database');
-    return mockPool;
-  }
-  
   if (!db) {
-    // Try mock mode if real DB is not available
-    usingMockDb = true;
-    console.log('Real database not initialized, falling back to mock database');
-    return mockPool;
+    throw new Error('Database not initialized. Call initializeDatabase() first.')
   }
-  
-  return db;
+  return db
 }
 
 // Handle cleanup on application shutdown
