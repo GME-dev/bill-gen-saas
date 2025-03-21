@@ -39,9 +39,7 @@ export async function initializeDatabase() {
     // Create the connection pool with minimal configuration
     const config = {
       connectionString,
-      ssl: {
-        rejectUnauthorized: false
-      },
+      // SSL is handled by the connection string's sslmode=require
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000
