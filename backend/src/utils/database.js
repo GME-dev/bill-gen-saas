@@ -39,7 +39,11 @@ export async function initializeDatabase() {
     // Create the connection pool with minimal configuration
     const config = {
       connectionString,
-      // SSL is handled by the connection string's sslmode=require
+      ssl: {
+        rejectUnauthorized: true,
+        // For Supabase, we need to enable SSL but trust the certificate chain
+        ca: process.env.SSL_CERT || undefined
+      },
       max: 20,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 10000
