@@ -190,8 +190,9 @@ export class PDFGenerator {
     drawBillDetails(page, bill, regularFont, boldFont) {
         const { width, height } = page.getSize();
         
-        // Draw bill number
-        page.drawText(`Bill No: ${bill.bill_number || bill._id}`, {
+        // Draw bill number - handle MongoDB _id properly
+        const billId = bill._id || bill.id || 'PREVIEW';
+        page.drawText(`Bill No: ${billId}`, {
             x: width - 200,
             y: height - 100,
             size: 12,
@@ -264,10 +265,10 @@ export class PDFGenerator {
     }
 
     drawPriceDetails(page, bill, regularFont, boldFont) {
-        const startY = 400;
+        const startY = 150;
         let y = startY;
         
-        page.drawText('Payment Details', {
+        page.drawText('Price Details', {
             x: this.margin,
             y,
             size: 14,
@@ -276,103 +277,91 @@ export class PDFGenerator {
         
         y -= 30;
         
-        // Draw table header
-        this.drawTableRow(
-            page,
-            this.margin,
-            y,
-            ['Description', 'Amount'],
-            boldFont,
-            12,
-            true
-        );
+        // Ensure numeric values and handle decimal values properly
+        const formatAmount = (amount) => {
+            if (amount === undefined || amount === null) return 'Rs. 0.00';
+            // Parse the amount to ensure it's a number and handle decimals correctly
+            const numericAmount = parseFloat(amount);
+            return isNaN(numericAmount) ? 'Rs. 0.00' : `Rs. ${numericAmount.toFixed(2)}`;
+        };
         
-        y -= 30;
-        
-        // Draw bike price
-        const bikePrice = bill.bike_price ? `Rs. ${parseInt(bill.bike_price).toLocaleString()}` : 'Rs. 0';
-        this.drawTableRow(
-            page,
-            this.margin,
-            y,
-            ['Bike Price', bikePrice],
-            regularFont
-        );
-        
-        y -= 30;
-        
-        // Add RMV charge based on type and model
-        if (!bill.is_ebicycle) {
-            if (bill.bill_type?.toUpperCase() === 'CASH') {
-                this.drawTableRow(
-                    page,
-                    this.margin,
-                    y,
-                    ['RMV Charge', 'Rs. 13,000'],
-                    regularFont
-                );
-                y -= 30;
-            } else if (bill.bill_type?.toUpperCase() === 'LEASING') {
-                this.drawTableRow(
-                    page,
-                    this.margin,
-                    y,
-                    ['RMV Charge', 'CPZ'],
-                    regularFont
-                );
-                y -= 30;
-            }
-        }
-        
-        // Handle down payment for lease
+        // For leasing bills, show down payment
         if (bill.bill_type?.toUpperCase() === 'LEASING') {
-            const downPayment = bill.down_payment ? `Rs. ${parseInt(bill.down_payment).toLocaleString()}` : 'Rs. 0';
             this.drawTableRow(
                 page,
                 this.margin,
                 y,
-                ['Down Payment', downPayment],
+                ['Bike Price', formatAmount(bill.bike_price)],
                 regularFont
             );
-            y -= 30;
-        }
-        
-        // Handle advance payment
-        if (bill.is_advance_payment) {
-            const advanceAmount = bill.advance_amount ? `Rs. ${parseInt(bill.advance_amount).toLocaleString()}` : 'Rs. 0';
-            this.drawTableRow(
-                page,
-                this.margin,
-                y,
-                ['Advance Amount', advanceAmount],
-                regularFont
-            );
+            
             y -= 30;
             
-            if (bill.balance_amount) {
-                const balanceAmount = `Rs. ${parseInt(bill.balance_amount).toLocaleString()}`;
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Down Payment', formatAmount(bill.down_payment)],
+                regularFont
+            );
+        } else {
+            // For cash bills, show bike price and RMV charge
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Bike Price', formatAmount(bill.bike_price)],
+                regularFont
+            );
+            
+            y -= 30;
+            
+            if (!bill.is_ebicycle) {
                 this.drawTableRow(
                     page,
                     this.margin,
                     y,
-                    ['Balance Amount', balanceAmount],
+                    ['RMV Charge', formatAmount(bill.rmv_charge || 13000)],
                     regularFont
                 );
+                
                 y -= 30;
             }
         }
         
-        // Draw total amount
-        const totalAmount = bill.total_amount ? `Rs. ${parseInt(bill.total_amount).toLocaleString()}` : 'Rs. 0';
-        this.drawTableRow(
-            page,
-            this.margin,
-            y,
-            ['Total Amount', totalAmount],
-            boldFont
-        );
+        // If it's an advance payment, show advance amount
+        if (bill.is_advance_payment) {
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Advance Amount', formatAmount(bill.advance_amount)],
+                regularFont
+            );
+            
+            y -= 30;
+            
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Balance Amount', formatAmount(bill.balance_amount)],
+                regularFont
+            );
+        } else {
+            // Show total amount for all bill types
+            this.drawTableRow(
+                page,
+                this.margin,
+                y,
+                ['Total Amount', formatAmount(bill.total_amount)],
+                regularFont,
+                12,
+                true
+            );
+        }
         
-        return y - 30;
+        return y - 30; // Return next Y position
     }
 
     drawFooter(page, regularFont) {
