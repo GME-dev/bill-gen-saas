@@ -10,8 +10,8 @@ RUN echo "Current directory content:" && ls -la
 COPY package.json ./
 COPY package-lock.json ./
 
-# Debug - show what was copied
-RUN echo "After copy package.json:" && ls -la
+# Debug - show what was copied and display package.json content
+RUN echo "After copy package.json:" && ls -la && echo "Package.json content:" && cat package.json
 
 # Install dependencies
 RUN npm install
@@ -34,5 +34,5 @@ RUN echo "Available NPM scripts:" && npm run
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Use a specific start command for our app
-CMD ["node", "src/index.js"] 
+# Use a specific start command for our app with explicitly specifying type=module
+CMD ["node", "--experimental-modules", "--es-module-specifier-resolution=node", "src/index.js"] 

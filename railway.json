@@ -6,7 +6,7 @@
     "root": "backend"
   },
   "deploy": {
-    "startCommand": "node src/index.js",
+    "startCommand": "node --experimental-modules --es-module-specifier-resolution=node src/index.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 10,
     "restartPolicyType": "ON_FAILURE"
