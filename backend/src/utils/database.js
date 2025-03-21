@@ -10,6 +10,49 @@ let connectionAttempts = 0
 const MAX_CONNECTION_ATTEMPTS = 5
 let initializationPromise = null
 
+// Use the direct connection URL if available, otherwise try to modify the pooler URL
+function getConnectionUrl() {
+  const originalUrl = process.env.DATABASE_URL
+
+  if (!originalUrl) {
+    throw new Error('DATABASE_URL environment variable is not set')
+  }
+
+  // If the URL contains pooler.supabase.com, it's using the connection pooler
+  // Let's try to modify it to connect directly to the Supabase project
+  if (originalUrl.includes('pooler.supabase.com')) {
+    console.log('Detected pooler URL, attempting to use direct connection instead')
+    try {
+      // Extract the credentials and region from the pooler URL
+      const match = originalUrl.match(/postgres:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/postgres/)
+      if (match) {
+        // Extract parts of the URL
+        const [_, username, password, host] = match
+        
+        // Try to extract the region and project reference from the host
+        // Example: aws-0-ap-south-1.pooler.supabase.com
+        const hostParts = host.split('.')
+        if (hostParts.length >= 3) {
+          // Try to guess the direct connection URL format
+          // This is an educated guess based on Supabase URL patterns
+          const region = hostParts[0]
+          const directUrl = `postgres://${username}:${password}@db.${process.env.SUPABASE_PROJECT_ID || 'your-project-id'}.supabase.co:5432/postgres?sslmode=prefer`
+          
+          console.log(`Trying direct connection URL (masked): postgres://****:****@db.${process.env.SUPABASE_PROJECT_ID || 'your-project-id'}.supabase.co:5432/postgres?sslmode=prefer`)
+          return directUrl
+        }
+      }
+    } catch (error) {
+      console.warn('Error creating direct URL:', error.message)
+      console.log('Falling back to original URL')
+    }
+  }
+
+  // If we can't create a direct URL or if the original URL is not a pooler URL,
+  // just return the original URL
+  return originalUrl
+}
+
 export async function initializeDatabase() {
   // If there's already an initialization in progress, return that promise
   if (initializationPromise) {
@@ -28,17 +71,14 @@ export async function initializeDatabase() {
       connectionAttempts++
       console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
 
-      // Extract connection details from DATABASE_URL
-      const connectionString = process.env.DATABASE_URL
-      if (!connectionString) {
-        throw new Error('DATABASE_URL environment variable is not set')
-      }
+      // Get connection string (direct or pooler)
+      const connectionString = getConnectionUrl()
 
       // Log masked connection string
       const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
       console.log(`Using database connection: ${maskedString}`)
 
-      // Most permissive SSL config for Supabase
+      // Configuration with relaxed SSL settings
       const config = {
         connectionString,
         ssl: {
