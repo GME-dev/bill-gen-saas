@@ -53,6 +53,16 @@ router.get('/:id', async (req, res) => {
   }
 })
 
+// Function to generate a properly formatted bill number
+const generateBillNumber = () => {
+  const date = new Date();
+  const year = date.getFullYear().toString().slice(-2);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+  return `BILL-${year}${month}${day}-${random}`;
+};
+
 // Create a new bill
 router.post('/', async (req, res) => {
   try {
@@ -84,21 +94,24 @@ router.post('/', async (req, res) => {
     
     // Get the bike model to determine if it's an e-bicycle
     const bikeModelsCollection = db.collection('bike_models')
-    const bikeModel = await bikeModelsCollection.findOne({ name: model_name })
-    const isEbicycle = bikeModel?.is_ebicycle || false
+    const bikeModel = await bikeModelsCollection.findOne({ model_name: model_name })
+    const isEbicycle = bikeModel?.is_ebicycle || req.body.is_ebicycle || false
     
     // Calculate correct values based on business rules
     let rmv_charge = 0
     let total_amount = 0
     let balance_amount = 0
     
+    // Ensure bike_price is not zero
+    const validBikePrice = parseFloat(bike_price) || (bikeModel ? parseFloat(bikeModel.price) : 0)
+    
     if (bill_type.toLowerCase() === 'cash') {
       // For cash sales
       if (!isEbicycle) {
         rmv_charge = 13000 // Regular bikes have RMV charge
-        total_amount = parseFloat(bike_price) + rmv_charge
+        total_amount = validBikePrice + rmv_charge
       } else {
-        total_amount = parseFloat(bike_price) // E-bicycles just have the bike price
+        total_amount = validBikePrice // E-bicycles just have the bike price
       }
     } else {
       // For leasing
@@ -111,9 +124,10 @@ router.post('/', async (req, res) => {
       balance_amount = total_amount - parseFloat(advance_amount)
     }
     
-    // Create the bill object
+    // Create the bill object with a proper bill number
     const collection = db.collection('bills')
     const newBill = {
+      bill_number: generateBillNumber(),
       bill_type: bill_type.toUpperCase(),
       customer_name,
       customer_nic, 
@@ -121,10 +135,11 @@ router.post('/', async (req, res) => {
       model_name,
       motor_number, 
       chassis_number,
-      bike_price: parseFloat(bike_price),
+      bike_price: validBikePrice,
       down_payment: parseFloat(down_payment) || 0,
       total_amount,
       rmv_charge,
+      is_ebicycle: isEbicycle,
       is_cpz: bill_type.toLowerCase() === 'leasing',
       payment_type: bill_type.toLowerCase(),
       is_advance_payment,
@@ -186,61 +201,37 @@ router.get('/:id/generate', async (req, res) => {
 router.get('/:id/pdf', async (req, res) => {
   try {
     const { id } = req.params;
-    const { preview, formData } = req.query;
+    const { preview } = req.query;
 
     let bill;
-    if (preview === 'true' && formData) {
-      // Use the current form data for preview
-      const parsedFormData = JSON.parse(formData);
-      // Ensure bill_type is uppercase and matches our enum
-      const billType = parsedFormData.bill_type?.toUpperCase() || 'CASH';
-      
-      // Get bike model info for proper RMV charge calculation
-      const db = getDatabase();
-      if (!db) {
-        return res.status(503).json({ error: 'Database connection not available' })
-      }
-      
-      const bikeModelsCollection = db.collection('bike_models')
-      const bikeModel = await bikeModelsCollection.findOne({ name: parsedFormData.model_name })
-        || { is_ebicycle: false, can_be_leased: true };
-
-      bill = {
-        id: 'PREVIEW',
-        ...parsedFormData,
-        bill_type: billType,
-        is_ebicycle: bikeModel.is_ebicycle,
-        can_be_leased: bikeModel.can_be_leased,
-        bill_date: new Date().toISOString()
-      };
-    } else {
-      // Get bill from database
-      const db = getDatabase();
-      if (!db) {
-        return res.status(503).json({ error: 'Database connection not available' })
-      }
-      
-      // Validate that the ID is a valid MongoDB ObjectId
-      if (!ObjectId.isValid(id)) {
-        console.log(`Invalid ObjectId format for PDF generation: ${id}`)
-        return res.status(400).json({ error: 'Invalid bill ID format' })
-      }
-      
-      const billsCollection = db.collection('bills')
-      const bikeModelsCollection = db.collection('bike_models')
-      
-      bill = await billsCollection.findOne({ _id: new ObjectId(id) })
-      if (!bill) {
-        return res.status(404).json({ error: 'Bill not found' });
-      }
-      
-      const bikeModel = await bikeModelsCollection.findOne({ name: bill.model_name })
-        || { is_ebicycle: false, can_be_leased: true };
-      
-      bill.is_ebicycle = bikeModel.is_ebicycle
-      bill.can_be_leased = bikeModel.can_be_leased
+    
+    const db = getDatabase();
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
     }
+    
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format for PDF generation: ${id}`)
+      return res.status(400).json({ error: 'Invalid bill ID format' })
+    }
+    
+    const billsCollection = db.collection('bills')
+    const bikeModelsCollection = db.collection('bike_models')
+    
+    bill = await billsCollection.findOne({ _id: new ObjectId(id) })
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+    
+    const bikeModel = await bikeModelsCollection.findOne({ model_name: bill.model_name })
+      || { is_ebicycle: false, can_be_leased: true };
+    
+    // Make sure the bill has the is_ebicycle flag set
+    bill.is_ebicycle = bill.is_ebicycle || bikeModel.is_ebicycle || false;
+    bill.can_be_leased = bikeModel.can_be_leased;
 
+    // Generate PDF
     const pdfBuffer = await pdfGenerator.generateBill(bill);
     
     // Set response headers for proper PDF handling
@@ -250,12 +241,12 @@ router.get('/:id/pdf', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     
     // Send the PDF buffer directly
-    res.end(pdfBuffer);
+    res.send(pdfBuffer);
   } catch (error) {
     console.error('Error generating PDF:', error);
-    res.status(500).json({ error: 'Failed to generate PDF' });
+    res.status(500).json({ error: 'Failed to generate PDF', details: error.message });
   }
-})
+});
 
 // Generate preview PDF with current branding
 router.get('/preview', async (req, res) => {
@@ -290,89 +281,200 @@ router.get('/preview', async (req, res) => {
   }
 })
 
-// Preview PDF with form data
+// Preview PDF from form data
 router.get('/preview/pdf', async (req, res) => {
   try {
     const { formData } = req.query;
+    
     if (!formData) {
-      return res.status(400).json({ error: 'Form data is required' });
+      return res.status(400).json({ error: 'Missing form data for preview' });
     }
-
+    
+    // Parse the form data
     const parsedFormData = JSON.parse(formData);
-    // Ensure bill_type is uppercase and matches our enum
-    const billType = parsedFormData.bill_type?.toUpperCase() || 'CASH';
     
     // Get bike model info for proper RMV charge calculation
     const db = getDatabase();
-    const modelResult = await db.query(
-      'SELECT is_ebicycle, can_be_leased FROM bike_models WHERE name = $1',
-      [parsedFormData.model_name]
-    );
-    const bikeModel = modelResult.rows[0] || { is_ebicycle: false, can_be_leased: true };
-
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const bikeModelsCollection = db.collection('bike_models')
+    const bikeModel = await bikeModelsCollection.findOne({ model_name: parsedFormData.model_name })
+      || { is_ebicycle: false, can_be_leased: true };
+    
+    // Create a bill object from the form data
     const bill = {
-      id: 'PREVIEW',
       ...parsedFormData,
-      bill_type: billType,
-      is_ebicycle: bikeModel.is_ebicycle,
+      is_ebicycle: parsedFormData.is_ebicycle || bikeModel.is_ebicycle || false,
       can_be_leased: bikeModel.can_be_leased,
-      bill_date: new Date().toISOString()
+      bill_date: parsedFormData.bill_date || new Date().toISOString()
     };
-
+    
+    // Generate the PDF using the pdfGenerator
     const pdfBuffer = await pdfGenerator.generateBill(bill);
     
     // Set response headers for proper PDF handling
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', pdfBuffer.length);
-    res.setHeader('Content-Disposition', 'inline; filename="preview.pdf"');
+    res.setHeader('Content-Disposition', 'inline');
     res.setHeader('Cache-Control', 'no-cache');
     
-    // Send the PDF buffer directly
-    res.end(pdfBuffer);
+    // Send the PDF buffer
+    res.send(pdfBuffer);
   } catch (error) {
     console.error('Error generating preview PDF:', error);
-    res.status(500).json({ error: 'Failed to generate preview PDF' });
+    res.status(500).json({ 
+      error: 'Failed to generate preview PDF', 
+      details: error.message 
+    });
   }
 });
 
 // Update bill
 router.put('/:id', async (req, res) => {
   try {
-    const db = getDatabase()
-    res.json({ message: 'Update bill endpoint' });
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
-})
-
-// Update a bill's status
-router.patch('/:id', async (req, res) => {
-  try {
-    const { status } = req.body;
+    const { id } = req.params;
+    const updateData = req.body;
+    
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format for update: ${id}`);
+      return res.status(400).json({ error: 'Invalid bill ID format' });
+    }
+    
     const db = getDatabase();
-    const result = await db.query(
-      'UPDATE bills SET status = $1 WHERE id = $2 RETURNING *',
-      [status, req.params.id]
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+    
+    // Format dates properly
+    if (updateData.bill_date) {
+      updateData.bill_date = new Date(updateData.bill_date);
+    }
+    
+    if (updateData.estimated_delivery_date) {
+      updateData.estimated_delivery_date = new Date(updateData.estimated_delivery_date);
+    }
+    
+    // Add updated_at timestamp
+    updateData.updated_at = new Date();
+    
+    const collection = db.collection('bills');
+    const result = await collection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: updateData },
+      { returnDocument: 'after' }
     );
-    if (result.rows.length === 0) {
+    
+    if (!result.value) {
       return res.status(404).json({ error: 'Bill not found' });
     }
-    res.json(result.rows[0]);
+    
+    res.json(result.value);
   } catch (error) {
     console.error('Error updating bill:', error);
     res.status(500).json({ error: 'Failed to update bill' });
   }
-})
+});
+
+// Update a bill's status
+router.patch('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format: ${id}`)
+      return res.status(400).json({ error: 'Invalid bill ID format' })
+    }
+    
+    const db = getDatabase();
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const collection = db.collection('bills');
+    const result = await collection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { status: status } },
+      { returnDocument: 'after' }
+    );
+    
+    if (!result.value) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+    
+    res.json(result.value);
+  } catch (error) {
+    console.error('Error updating bill status:', error);
+    res.status(500).json({ error: 'Failed to update bill status' });
+  }
+});
+
+// Add a dedicated route for status updates
+router.put('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format for status update: ${id}`)
+      return res.status(400).json({ error: 'Invalid bill ID format' })
+    }
+    
+    const db = getDatabase();
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const collection = db.collection('bills');
+    const result = await collection.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: { status: status } },
+      { returnDocument: 'after' }
+    );
+    
+    if (!result.value) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+    
+    res.json(result.value);
+  } catch (error) {
+    console.error('Error updating bill status:', error);
+    res.status(500).json({ error: 'Failed to update bill status' });
+  }
+});
 
 // Delete bill
 router.delete('/:id', async (req, res) => {
   try {
-    const db = getDatabase();
-    await db.query('DELETE FROM bills WHERE id = $1', [req.params.id]);
-    res.status(204).send();
+    const { id } = req.params
+    
+    // Validate that the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      console.log(`Invalid ObjectId format: ${id}`)
+      return res.status(400).json({ error: 'Invalid bill ID format' })
+    }
+    
+    const db = getDatabase()
+    if (!db) {
+      return res.status(503).json({ error: 'Database connection not available' })
+    }
+    
+    const collection = db.collection('bills')
+    const result = await collection.deleteOne({ _id: new ObjectId(id) })
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Bill not found' })
+    }
+    
+    res.status(204).send()
   } catch (error) {
-    console.error('Error deleting bill:', error);
-    res.status(500).json({ error: 'Failed to delete bill' });
+    console.error('Error deleting bill:', error)
+    res.status(500).json({ error: 'Failed to delete bill' })
   }
 })
 

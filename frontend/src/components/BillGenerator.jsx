@@ -35,9 +35,12 @@ const BillGenerator = () => {
   const handleModelChange = (value) => {
     const model = bikeModels.find(m => m.model_name === value);
     setSelectedModel(model);
-    form.setFieldsValue({
-      bike_price: model?.price || 0
-    });
+    
+    if (model && model.price) {
+      form.setFieldsValue({
+        bike_price: model.price
+      });
+    }
   };
 
   const generateBillNumber = () => {
@@ -77,9 +80,13 @@ const BillGenerator = () => {
       
       setPreviewLoading(true);
       
+      // Get the selected model's price if bike_price is missing
+      const bikePrice = values.bike_price || (selectedModel ? selectedModel.price : 0);
+      
       // Safely format dates
       const formattedValues = {
         ...values,
+        bike_price: bikePrice,
         bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
         estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null,
         is_advance_payment: isAdvancePayment,
@@ -96,10 +103,10 @@ const BillGenerator = () => {
 
       // Calculate total amount based on bill type and model
       if (billType === 'cash') {
-        billData.total_amount = selectedModel.is_ebicycle 
-          ? values.bike_price 
-          : parseFloat(values.bike_price) + 13000;
-        billData.rmv_charge = selectedModel.is_ebicycle ? 0 : 13000;
+        billData.total_amount = selectedModel?.is_ebicycle 
+          ? parseFloat(bikePrice) 
+          : parseFloat(bikePrice) + 13000;
+        billData.rmv_charge = selectedModel?.is_ebicycle ? 0 : 13000;
       } else {
         billData.total_amount = parseFloat(values.down_payment || 0);
         billData.rmv_charge = 13500;
@@ -136,9 +143,13 @@ const BillGenerator = () => {
     try {
       setLoading(true);
       
+      // Get the selected model's price if bike_price is missing
+      const bikePrice = values.bike_price || (selectedModel ? selectedModel.price : 0);
+      
       // Ensure dates are properly formatted
       const billData = {
         ...values,
+        bike_price: bikePrice,
         bill_number: generateBillNumber(),
         status: 'pending',
         is_ebicycle: selectedModel?.is_ebicycle || false,
@@ -150,10 +161,10 @@ const BillGenerator = () => {
 
       // Calculate total amount based on bill type and model
       if (billType === 'cash') {
-        billData.total_amount = selectedModel.is_ebicycle 
-          ? parseFloat(values.bike_price) 
-          : parseFloat(values.bike_price) + 13000;
-        billData.rmv_charge = selectedModel.is_ebicycle ? 0 : 13000;
+        billData.total_amount = selectedModel?.is_ebicycle 
+          ? parseFloat(bikePrice) 
+          : parseFloat(bikePrice) + 13000;
+        billData.rmv_charge = selectedModel?.is_ebicycle ? 0 : 13000;
       } else {
         billData.total_amount = parseFloat(values.down_payment || 0);
         billData.rmv_charge = 13500;

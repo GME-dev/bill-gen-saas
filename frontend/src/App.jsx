@@ -8,6 +8,7 @@ import BillView from './pages/BillView'
 import Dashboard from './pages/Dashboard'
 import BillGenerator from './components/BillGenerator'
 import BillConversion from './components/BillConversion'
+import BillEdit from './pages/BillEdit'
 
 const App = () => {
   return (
@@ -21,6 +22,7 @@ const App = () => {
             <Route path="/bills/new" element={<BillGenerator />} />
             <Route path="/bills/:id" element={<BillView />} />
             <Route path="/bills/:id/convert" element={<BillConversion />} />
+            <Route path="/bills/:id/edit" element={<BillEdit />} />
           </Routes>
         </main>
         <Toaster position="top-right" />

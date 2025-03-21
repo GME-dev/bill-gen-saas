@@ -269,7 +269,9 @@ const BillView = () => {
         <Card title="Vehicle Information" className="mb-6">
           <Descriptions bordered column={1}>
             <Descriptions.Item label="Model">{bill.model_name}</Descriptions.Item>
-            <Descriptions.Item label="Type">{bill.is_ebicycle ? 'E-Bicycle' : 'Regular Bicycle'}</Descriptions.Item>
+            <Descriptions.Item label="Type">
+              {bill.is_ebicycle ? 'Electric Bicycle' : 'Regular Bicycle'}
+            </Descriptions.Item>
             <Descriptions.Item label="Motor Number">{bill.motor_number}</Descriptions.Item>
             <Descriptions.Item label="Chassis Number">{bill.chassis_number}</Descriptions.Item>
           </Descriptions>
