@@ -1,5 +1,6 @@
 import pg from 'pg'
 import dotenv from 'dotenv'
+import dns from 'dns'
 
 // Load environment variables
 dotenv.config()
@@ -9,18 +10,35 @@ let db = null
 let connectionAttempts = 0
 const MAX_CONNECTION_ATTEMPTS = 5
 let initializationPromise = null
+let connectionType = 'auto' // 'direct', 'pooler', or 'auto'
+
+// Forced IPv4 resolution for Node.js
+// This helps with environments that have IPv6 disabled
+try {
+  // Check if this setting was already applied
+  if (!process.env.NODE_OPTIONS || !process.env.NODE_OPTIONS.includes('--dns-result-order=ipv4first')) {
+    console.log('Setting DNS resolution preference to IPv4 first')
+    dns.setDefaultResultOrder('ipv4first')
+  }
+} catch (error) {
+  console.warn('Failed to set DNS resolution order:', error.message)
+}
 
 // Use the direct connection URL if available, otherwise try to modify the pooler URL
-function getConnectionUrl() {
+function getConnectionUrl(type = connectionType) {
   const originalUrl = process.env.DATABASE_URL
 
   if (!originalUrl) {
     throw new Error('DATABASE_URL environment variable is not set')
   }
 
-  // If the URL contains pooler.supabase.com, it's using the connection pooler
-  // Let's try to modify it to connect directly to the Supabase project
-  if (originalUrl.includes('pooler.supabase.com')) {
+  // If explicitly using pooler, return the original URL
+  if (type === 'pooler') {
+    return originalUrl
+  }
+
+  // If the URL contains pooler.supabase.com and we want direct or auto connection
+  if (originalUrl.includes('pooler.supabase.com') && (type === 'direct' || type === 'auto')) {
     console.log('Detected pooler URL, attempting to use direct connection instead')
     try {
       // Extract the credentials and region from the pooler URL
@@ -33,13 +51,18 @@ function getConnectionUrl() {
         // Example: aws-0-ap-south-1.pooler.supabase.com
         const hostParts = host.split('.')
         if (hostParts.length >= 3) {
-          // Try to guess the direct connection URL format
-          // This is an educated guess based on Supabase URL patterns
-          const region = hostParts[0]
-          const directUrl = `postgres://${username}:${password}@db.${process.env.SUPABASE_PROJECT_ID || 'your-project-id'}.supabase.co:5432/postgres?sslmode=prefer`
+          const projectId = process.env.SUPABASE_PROJECT_ID
           
-          console.log(`Trying direct connection URL (masked): postgres://****:****@db.${process.env.SUPABASE_PROJECT_ID || 'your-project-id'}.supabase.co:5432/postgres?sslmode=prefer`)
-          return directUrl
+          // Only proceed if we have a project ID
+          if (projectId) {
+            // Try to guess the direct connection URL format
+            const directUrl = `postgres://${username}:${password}@db.${projectId}.supabase.co:5432/postgres?sslmode=prefer`
+            
+            console.log(`Trying direct connection URL (masked): postgres://****:****@db.${projectId}.supabase.co:5432/postgres?sslmode=prefer`)
+            return directUrl
+          } else {
+            console.log('No SUPABASE_PROJECT_ID provided, using pooler connection')
+          }
         }
       }
     } catch (error) {
@@ -71,8 +94,16 @@ export async function initializeDatabase() {
       connectionAttempts++
       console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
 
-      // Get connection string (direct or pooler)
-      const connectionString = getConnectionUrl()
+      // First try with whatever connection type is set
+      let connectionString = getConnectionUrl()
+      
+      // If we're on auto mode and we've tried before, alternate between direct and pooler
+      if (connectionType === 'auto' && connectionAttempts > 1) {
+        // On even attempts, try direct; on odd, try pooler (after the first attempt)
+        const attemptConnectionType = connectionAttempts % 2 === 0 ? 'direct' : 'pooler'
+        console.log(`Auto-switching to ${attemptConnectionType} connection for this attempt`)
+        connectionString = getConnectionUrl(attemptConnectionType)
+      }
 
       // Log masked connection string
       const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
@@ -85,7 +116,7 @@ export async function initializeDatabase() {
           rejectUnauthorized: false,
           checkServerIdentity: () => undefined // Skip all hostname checks
         },
-        max: 20,
+        max: 20, 
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 10000
       }
@@ -116,6 +147,14 @@ export async function initializeDatabase() {
         console.log('Running test query...')
         const result = await client.query('SELECT NOW()')
         console.log('Database connection successful:', result.rows[0])
+        
+        // If we're on auto and succeeded, remember which type worked
+        if (connectionType === 'auto') {
+          // Check if we're using direct or pooler based on the connectionString
+          const successfulType = connectionString.includes('pooler.supabase.com') ? 'pooler' : 'direct'
+          console.log(`Auto-detected successful connection type: ${successfulType}`)
+          connectionType = successfulType // Remember for next time
+        }
         
         // Reset connection attempts on success
         connectionAttempts = 0
