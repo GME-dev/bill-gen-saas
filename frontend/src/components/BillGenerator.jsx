@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Select, Switch, InputNumber, Button, Alert, message } from 'antd';
+import { Form, Input, Select, Button, DatePicker, InputNumber, Switch, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../config/apiClient';
 import toast from 'react-hot-toast';
@@ -24,9 +24,17 @@ const BillGenerator = () => {
       const data = await apiClient.get('/api/bike-models');
       setBikeModels(data);
     } catch (error) {
-      toast.error('Failed to fetch bike models');
       console.error('Error fetching bike models:', error);
+      message.error('Failed to fetch bike models');
     }
+  };
+
+  const handleModelChange = (value) => {
+    const model = bikeModels.find(m => m.model_name === value);
+    setSelectedModel(model);
+    form.setFieldsValue({
+      bike_price: model?.price || 0
+    });
   };
 
   const generateBillNumber = () => {
@@ -58,62 +66,42 @@ const BillGenerator = () => {
     return bikePrice + 13000;
   };
 
-  const handleModelChange = (modelName) => {
-    const model = bikeModels.find(m => m.model_name === modelName);
-    setSelectedModel(model);
-    
-    // Reset bill type to cash if e-bicycle is selected
-    if (model?.is_ebicycle) {
-      setBillType('cash');
-      form.setFieldsValue({ bill_type: 'cash' });
-    }
-
-    // Set the bike price
-    form.setFieldsValue({ bike_price: model?.price });
-  };
-
   const handleSubmit = async (values) => {
-    setLoading(true);
     try {
-      const model = bikeModels.find(m => m.model_name === values.model_name);
-      const totalAmount = calculateTotalAmount(values);
+      setLoading(true);
       
       const billData = {
+        ...values,
         bill_number: generateBillNumber(),
-        bill_type: billType,
-        is_advance_payment: isAdvancePayment,
-        total_amount: totalAmount,
-        bike_price: model.price,
-        rmv_charge: model.is_ebicycle ? 0 : (billType === 'leasing' ? 13500 : 13000),
-        is_cpz: billType === 'leasing',
-        payment_type: billType,
-        customer_name: values.customer_name,
-        customer_nic: values.customer_nic,
-        customer_address: values.customer_address,
-        model_name: values.model_name,
-        motor_number: values.motor_number,
-        chassis_number: values.chassis_number,
-        down_payment: values.down_payment,
-        advance_amount: values.advance_amount,
-        balance_amount: isAdvancePayment ? 
-          (billType === 'leasing' ? 
-            values.down_payment - values.advance_amount : 
-            totalAmount - values.advance_amount) :
-          0,
-        status: 'pending'
-      };
-
-      await apiClient.post('/api/bills', {
-        ...billData,
+        status: 'pending',
+        is_ebicycle: selectedModel?.is_ebicycle || false,
         bill_date: values.bill_date.toISOString(),
         estimated_delivery_date: values.estimated_delivery_date?.toISOString()
-      });
+      };
 
-      toast.success('Bill generated successfully');
+      // Calculate total amount based on bill type and model
+      if (values.bill_type === 'cash') {
+        billData.total_amount = selectedModel.is_ebicycle 
+          ? values.bike_price 
+          : values.bike_price + 13000;
+      } else {
+        billData.total_amount = values.down_payment;
+        billData.rmv_charge = 13500;
+        billData.is_cpz = true;
+      }
+
+      // Handle advance payment
+      if (values.is_advance_payment) {
+        billData.balance_amount = billData.total_amount - values.advance_amount;
+      }
+
+      await apiClient.post('/api/bills', billData);
+      
+      message.success('Bill generated successfully');
       navigate('/bills');
     } catch (error) {
-      toast.error('Failed to generate bill');
       console.error('Error generating bill:', error);
+      message.error('Failed to generate bill');
     } finally {
       setLoading(false);
     }
@@ -124,11 +112,9 @@ const BillGenerator = () => {
       <h1 className="text-2xl font-semibold mb-6">Generate New Bill</h1>
 
       {selectedModel?.is_ebicycle && (
-        <Alert
+        <message.info
           message="E-Bicycle Selected"
           description="This is an e-bicycle model. Only cash sales are allowed, and no RMV charges apply."
-          type="info"
-          showIcon
           className="mb-6"
         />
       )}
@@ -137,6 +123,12 @@ const BillGenerator = () => {
         form={form}
         layout="vertical"
         onFinish={handleSubmit}
+        initialValues={{
+          bill_type: 'cash',
+          is_advance_payment: false,
+          bill_date: null,
+          estimated_delivery_date: null
+        }}
       >
         <Form.Item
           name="model_name"
@@ -243,7 +235,7 @@ const BillGenerator = () => {
         </Form.Item>
 
         <Form.Item>
-          <Button type="primary" htmlType="submit" loading={loading} block>
+          <Button type="primary" htmlType="submit" loading={loading}>
             Generate Bill
           </Button>
         </Form.Item>

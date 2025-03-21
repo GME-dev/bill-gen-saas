@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, message } from 'antd';
-import { supabase } from '../config/supabaseClient';
+import apiClient from '../config/apiClient';
 
 const AdvancementConversion = () => {
   const [form] = Form.useForm();
@@ -15,13 +15,12 @@ const AdvancementConversion = () => {
 
   const fetchAdvancePayments = async () => {
     try {
-      const { data, error } = await supabase
-        .from('bills')
-        .select('*, bike_models(*)')
-        .eq('is_advance_payment', true)
-        .eq('status', 'pending');
-        
-      if (error) throw error;
+      const { data } = await apiClient.get('/api/bills', {
+        params: {
+          is_advance_payment: true,
+          status: 'pending'
+        }
+      });
       setAdvancePayments(data);
     } catch (error) {
       message.error('Failed to fetch advance payments');
@@ -51,19 +50,13 @@ const AdvancementConversion = () => {
 
       delete newBillData.id; // Remove the id so a new one is generated
 
-      const { error: insertError } = await supabase
-        .from('bills')
-        .insert([newBillData]);
-
-      if (insertError) throw insertError;
+      // Create new bill
+      await apiClient.post('/api/bills', newBillData);
 
       // Update the advance payment bill status
-      const { error: updateError } = await supabase
-        .from('bills')
-        .update({ status: 'converted' })
-        .eq('id', selectedBill.id);
-
-      if (updateError) throw updateError;
+      await apiClient.patch(`/api/bills/${selectedBill.id}`, {
+        status: 'converted'
+      });
 
       message.success('Successfully converted advance payment to full bill');
       setIsModalVisible(false);
