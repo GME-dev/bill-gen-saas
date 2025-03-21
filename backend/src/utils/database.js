@@ -1,7 +1,5 @@
 import pg from 'pg'
 import dotenv from 'dotenv'
-import fs from 'fs'
-import path from 'path'
 
 // Load environment variables
 dotenv.config()
@@ -40,15 +38,12 @@ export async function initializeDatabase() {
       const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
       console.log(`Using database connection: ${maskedString}`)
 
-      // Create the connection pool with minimal configuration
+      // Most permissive SSL config for Supabase
       const config = {
         connectionString,
-        // For Supabase pooled connections, we need to trust their certificate chain
         ssl: {
           rejectUnauthorized: false,
-          // Add additional SSL options to help with connection
-          minVersion: 'TLSv1.2',
-          maxVersion: 'TLSv1.3'
+          checkServerIdentity: () => undefined // Skip all hostname checks
         },
         max: 20,
         idleTimeoutMillis: 30000,
@@ -178,7 +173,7 @@ export async function initializeDatabase() {
       } else {
         console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`)
         // Wait a bit before retrying
-        await new Promise(resolve => setTimeout(resolve, 2000))
+        await new Promise(resolve => setTimeout(resolve, 3000))
         initializationPromise = null
         return initializeDatabase()
       }
@@ -187,60 +182,6 @@ export async function initializeDatabase() {
 
   return initializationPromise
 }
-
-// Simple in-memory mock database for fallback
-const mockDb = {
-  bills: [],
-  bike_models: [
-    { id: 1, model_name: 'TMR-G18', price: 499500.00, motor_number_prefix: 'G18', chassis_number_prefix: 'G18' },
-    { id: 2, model_name: 'TMR-MNK3', price: 475000.00, motor_number_prefix: 'MNK3', chassis_number_prefix: 'MNK3' },
-    { id: 3, model_name: 'TMR-Q1', price: 449500.00, motor_number_prefix: 'Q1', chassis_number_prefix: 'Q1' },
-    { id: 4, model_name: 'TMR-ZL', price: 399500.00, motor_number_prefix: 'ZL', chassis_number_prefix: 'ZL' },
-    { id: 5, model_name: 'TMR-ZS', price: 349500.00, motor_number_prefix: 'ZS', chassis_number_prefix: 'ZS' },
-    { id: 6, model_name: 'TMR-XGW', price: 299500.00, motor_number_prefix: 'XGW', chassis_number_prefix: 'XGW' },
-    { id: 7, model_name: 'TMR-COLA5', price: 249500.00, motor_number_prefix: 'COLA5', chassis_number_prefix: 'COLA5' },
-    { id: 8, model_name: 'TMR-X01', price: 219500.00, motor_number_prefix: 'X01', chassis_number_prefix: 'X01' }
-  ]
-};
-
-// Mock database client for when real DB is unavailable
-const mockClient = {
-  query: async (text, params) => {
-    console.log('MOCK DB QUERY:', text, params);
-    
-    // Handle different types of queries
-    if (text.includes('SELECT 1') || text.includes('SELECT NOW()')) {
-      return { rows: [{ '?column?': 1, now: new Date() }] };
-    }
-    
-    if (text.includes('SELECT * FROM bike_models')) {
-      return { rows: mockDb.bike_models };
-    }
-    
-    if (text.includes('SELECT * FROM bills')) {
-      return { rows: mockDb.bills };
-    }
-    
-    // For inserts, just log and return success
-    if (text.startsWith('INSERT INTO')) {
-      console.log('MOCK INSERT:', text, params);
-      return { rowCount: 1 };
-    }
-    
-    return { rows: [] };
-  },
-  release: () => console.log('MOCK: Client released')
-};
-
-const mockPool = {
-  connect: async () => mockClient,
-  query: async (text, params) => mockClient.query(text, params),
-  end: async () => console.log('MOCK: Pool ended'),
-  on: () => {} // No-op for event handlers
-};
-
-// Lets us know if we're using the real DB or mock
-let usingMockDb = false;
 
 export function getDatabase() {
   if (!db) {
