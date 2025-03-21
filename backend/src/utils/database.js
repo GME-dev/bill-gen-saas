@@ -38,21 +38,16 @@ export async function initializeDatabase() {
     const maskedString = connectionString.replace(/\/\/([^:]+):([^@]+)@/, '//****:****@')
     console.log(`Using database connection: ${maskedString}`)
 
-    // Try to read SSL certificate if it exists
+    // Configure SSL if certificate is provided
     let sslConfig = false
-    try {
-      const certPath = path.join(process.cwd(), 'cert', 'ca-certificate.crt')
-      if (fs.existsSync(certPath)) {
-        console.log('Found SSL certificate, configuring secure connection...')
-        sslConfig = {
-          ca: fs.readFileSync(certPath).toString(),
-          rejectUnauthorized: true
-        }
-      } else {
-        console.log('No SSL certificate found at:', certPath)
+    if (process.env.CA_CERT) {
+      console.log('Found SSL certificate in environment, configuring secure connection...')
+      sslConfig = {
+        ca: process.env.CA_CERT,
+        rejectUnauthorized: true
       }
-    } catch (err) {
-      console.error('Error reading SSL certificate:', err)
+    } else {
+      console.log('No SSL certificate found in environment variables')
     }
 
     // Create the connection pool with minimal configuration
