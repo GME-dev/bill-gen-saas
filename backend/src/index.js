@@ -1,11 +1,11 @@
 // Simplified fallback JavaScript version
-import express from 'express'
-import cors from 'cors'
+const express = require('express')
+const cors = require('cors')
 
 console.log("Using JavaScript fallback version of index.js")
 
 const app = express()
-const port = process.env.PORT || 3000
+const port = process.env.PORT || 8080
 
 // Simple middleware
 app.use(cors())
@@ -19,6 +19,19 @@ app.get('/health', (req, res) => {
 // Basic API route
 app.get('/api', (req, res) => {
   res.status(200).json({ message: 'API is running in fallback mode' });
+});
+
+// Add a root route
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    message: 'Welcome to TMR Bill Generator API',
+    status: 'Running in fallback mode',
+    version: '1.0.0',
+    endpoints: [
+      { path: '/health', description: 'Health check endpoint' },
+      { path: '/api', description: 'Basic API information' }
+    ]
+  });
 });
 
 // Start server
