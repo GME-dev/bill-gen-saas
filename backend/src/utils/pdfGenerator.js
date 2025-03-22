@@ -935,6 +935,216 @@ export class PDFGenerator {
             // Continue with default fonts if custom fonts fail
         }
     }
+
+    // Add the missing drawBillContent function
+    async drawBillContent(doc, bill) {
+        try {
+            // Normalize bill data
+            const normalizedBill = {
+                bill_number: bill.bill_number || bill._id || bill.id || 'PREVIEW',
+                bill_date: bill.bill_date || new Date(),
+                customer_name: bill.customer_name || 'N/A',
+                customer_nic: bill.customer_nic || 'N/A',
+                customer_address: bill.customer_address || 'N/A',
+                model_name: bill.model_name || 'N/A',
+                motor_number: bill.motor_number || 'N/A',
+                chassis_number: bill.chassis_number || 'N/A',
+                bike_price: parseFloat(bill.bike_price) || 0,
+                bill_type: (bill.bill_type || 'CASH').toUpperCase(),
+                down_payment: parseFloat(bill.down_payment) || 0,
+                total_amount: parseFloat(bill.total_amount) || 0,
+                is_ebicycle: bill.is_ebicycle || bill.vehicle_type === 'E-Bicycle',
+                estimated_delivery_date: bill.estimated_delivery_date || null
+            };
+            
+            // Set up document properties
+            doc.info.Title = `TMR Invoice ${normalizedBill.bill_number}`;
+            doc.info.Author = 'TMR TRADING LANKA (PVT) LIMITED';
+            doc.info.Subject = `Invoice #${normalizedBill.bill_number}`;
+            doc.info.Keywords = ['invoice', 'bill', 'tmr', 'motorcycle', 'ebike'];
+            
+            // Draw company header
+            doc.font('Bold').fontSize(16).text('TMR TRADING LANKA (PVT) LIMITED', {align: 'center'});
+            doc.font('Regular').fontSize(12).text('GUNAWARDANA MOTORS, EMBILIPITIYA', {align: 'center'});
+            doc.moveDown(0.5);
+            
+            // Draw invoice title
+            doc.font('Bold').fontSize(14).text('INVOICE', {align: 'center'});
+            doc.moveDown(0.5);
+            
+            // Draw bill information
+            doc.font('Bold').fontSize(10).text(`Bill Number: ${normalizedBill.bill_number}`);
+            doc.font('Regular').fontSize(10).text(`Date: ${this.formatDate(normalizedBill.bill_date)}`);
+            doc.font('Regular').fontSize(10).text(`Bill Type: ${normalizedBill.bill_type}`);
+            doc.moveDown();
+            
+            // Draw customer details
+            doc.font('Bold').fontSize(12).text('Customer Details');
+            doc.moveDown(0.5);
+            doc.font('Regular').fontSize(10).text(`Name: ${normalizedBill.customer_name}`);
+            doc.font('Regular').fontSize(10).text(`NIC: ${normalizedBill.customer_nic}`);
+            doc.font('Regular').fontSize(10).text(`Address: ${normalizedBill.customer_address}`);
+            doc.moveDown();
+            
+            // Draw vehicle details
+            doc.font('Bold').fontSize(12).text('Vehicle Details');
+            doc.moveDown(0.5);
+            doc.font('Regular').fontSize(10).text(`Model: ${normalizedBill.model_name}`);
+            doc.font('Regular').fontSize(10).text(`Type: ${normalizedBill.is_ebicycle ? 'E-Bicycle' : 'Bicycle'}`);
+            doc.font('Regular').fontSize(10).text(`Motor No: ${normalizedBill.motor_number}`);
+            doc.font('Regular').fontSize(10).text(`Chassis No: ${normalizedBill.chassis_number}`);
+            doc.moveDown();
+            
+            // Draw payment details
+            doc.font('Bold').fontSize(12).text('Payment Details');
+            doc.moveDown(0.5);
+            
+            // Create payment table data
+            const tableData = [
+                ['Description', 'Amount'],
+                ['Bike Price', this.formatAmount(normalizedBill.bike_price)]
+            ];
+            
+            // Add RMV charge for non-ebicycles
+            if (!normalizedBill.is_ebicycle) {
+                tableData.push(['RMV Charge', 'Rs. 13,000.00']);
+            }
+            
+            // Add special rows based on bill type
+            if (normalizedBill.bill_type === 'LEASING') {
+                tableData.push(['Down Payment', this.formatAmount(normalizedBill.down_payment)]);
+                tableData.push(['Total Amount (Down Payment)', this.formatAmount(normalizedBill.down_payment)]);
+            } else if (normalizedBill.bill_type === 'ADVANCE') {
+                tableData.push(['Down Payment', this.formatAmount(normalizedBill.down_payment)]);
+                const balanceAmount = normalizedBill.bike_price - normalizedBill.down_payment;
+                tableData.push(['Balance Amount', this.formatAmount(balanceAmount)]);
+                tableData.push(['Total Amount', this.formatAmount(normalizedBill.bike_price)]);
+                
+                if (normalizedBill.estimated_delivery_date) {
+                    doc.moveDown();
+                    doc.font('Bold').fontSize(10).text(`Estimated Delivery Date: ${this.formatDate(normalizedBill.estimated_delivery_date)}`);
+                }
+            } else {
+                // Cash bill
+                tableData.push(['Total Amount', this.formatAmount(normalizedBill.total_amount)]);
+            }
+            
+            // Draw the payment table
+            this.drawTable(doc, tableData);
+            doc.moveDown(2);
+            
+            // Draw signature lines
+            doc.font('Regular').fontSize(10);
+            
+            // Draw signature lines
+            const pageWidth = doc.page.width - 2 * doc.page.margins.left;
+            const signatureWidth = 150;
+            
+            doc.moveTo(doc.page.margins.left, doc.y)
+               .lineTo(doc.page.margins.left + signatureWidth, doc.y)
+               .stroke();
+            doc.text('Authorized Signature', doc.page.margins.left, doc.y + 5, {width: signatureWidth, align: 'center'});
+            
+            doc.moveTo(doc.page.margins.left + pageWidth - signatureWidth, doc.y - 15)
+               .lineTo(doc.page.width - doc.page.margins.right, doc.y - 15)
+               .stroke();
+            doc.text('Customer Signature', doc.page.margins.left + pageWidth - signatureWidth, doc.y - 10, {width: signatureWidth, align: 'center'});
+            
+            doc.moveDown(2);
+            
+            // Thank you message
+            doc.font('Bold').fontSize(12).text('Thank you for your business!', {align: 'center'});
+            
+            return true;
+        } catch (error) {
+            console.error('Error drawing bill content:', error);
+            throw error;
+        }
+    }
+
+    // Helper function to draw tables
+    drawTable(doc, data) {
+        const startX = doc.page.margins.left;
+        const startY = doc.y;
+        const cellPadding = 5;
+        const cellHeight = 20;
+        const columnWidths = [300, 150];
+        const tableWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+        
+        // Draw header row
+        doc.font('Bold').fontSize(10);
+        doc.fillColor('#f3f4f6'); // Light gray background for header
+        doc.rect(startX, startY, tableWidth, cellHeight).fill();
+        doc.fillColor('#000000'); // Reset to black text
+        
+        let y = startY + cellPadding;
+        data[0].forEach((header, i) => {
+            const x = startX + columnWidths.slice(0, i).reduce((sum, width) => sum + width, 0) + cellPadding;
+            doc.text(header, x, y);
+        });
+        
+        // Draw data rows
+        doc.font('Regular').fontSize(10);
+        for (let row = 1; row < data.length; row++) {
+            y = startY + row * cellHeight;
+            
+            // Draw row background (alternating colors)
+            if (row === data.length - 1) {
+                // Highlight total row
+                doc.fillColor('#e5e7eb');
+                doc.rect(startX, y, tableWidth, cellHeight).fill();
+                doc.fillColor('#000000');
+                doc.font('Bold');
+            } else if (row % 2 === 0) {
+                doc.fillColor('#f9fafb');
+                doc.rect(startX, y, tableWidth, cellHeight).fill();
+                doc.fillColor('#000000');
+            }
+            
+            // Draw cell text
+            for (let col = 0; col < data[row].length; col++) {
+                const x = startX + columnWidths.slice(0, col).reduce((sum, width) => sum + width, 0) + cellPadding;
+                const cellY = y + cellPadding;
+                
+                // Right-align amounts in the second column
+                const textOptions = {};
+                if (col === 1) {
+                    textOptions.width = columnWidths[col] - 2 * cellPadding;
+                    textOptions.align = 'right';
+                }
+                
+                doc.text(data[row][col], x, cellY, textOptions);
+            }
+            
+            // Reset to regular font after total row
+            if (row === data.length - 1) {
+                doc.font('Regular');
+            }
+        }
+        
+        // Draw table borders
+        doc.rect(startX, startY, tableWidth, data.length * cellHeight).stroke();
+        
+        // Draw column dividers
+        let dividerX = startX;
+        for (let i = 0; i < columnWidths.length - 1; i++) {
+            dividerX += columnWidths[i];
+            doc.moveTo(dividerX, startY)
+               .lineTo(dividerX, startY + data.length * cellHeight)
+               .stroke();
+        }
+        
+        // Draw row dividers
+        for (let i = 1; i < data.length; i++) {
+            const dividerY = startY + i * cellHeight;
+            doc.moveTo(startX, dividerY)
+               .lineTo(startX + tableWidth, dividerY)
+               .stroke();
+        }
+        
+        // Update document y position to after the table
+        doc.y = startY + data.length * cellHeight + 10;
+    }
 }
 
 export default PDFGenerator 
