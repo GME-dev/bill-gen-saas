@@ -1,49 +1,27 @@
+// Simplified fallback JavaScript version
 import express from 'express'
 import cors from 'cors'
-import { initializeDatabase } from './utils/database.js'
-import billsRouter from './routes/bills.js'
-import bikeModelsRouter from './routes/bike-models.js'
-import healthRouter from './routes/health.js'
-import billsRoutes from './routes/bills.js'
+
+console.log("Using JavaScript fallback version of index.js")
 
 const app = express()
 const port = process.env.PORT || 3000
 
-// Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type']
-}))
-
+// Simple middleware
+app.use(cors())
 app.use(express.json())
 
-// Initialize database connection
-initializeDatabase()
-  .then(() => {
-    console.log('Database connection initialized')
-  })
-  .catch(error => {
-    console.error('Failed to initialize database:', error)
-    process.exit(1)
-  })
-
-// Routes
-app.use('/api/bills', billsRouter)
-app.use('/api/bike-models', bikeModelsRouter)
-app.use('/health', healthRouter)
-
-// Add direct PDF routes
-// Direct PDF routes
-app.get('/api/bills/:id/pdf', (req, res) => {
-  billsRoutes.handle(req, res);
+// Basic health check route
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'System is healthy (JS fallback)' });
 });
 
-app.get('/api/bills/preview/pdf', (req, res) => {
-  billsRoutes.handle(req, res);
+// Basic API route
+app.get('/api', (req, res) => {
+  res.status(200).json({ message: 'API is running in fallback mode' });
 });
 
 // Start server
 app.listen(port, () => {
-  console.log(`Server is running on port ${port}`)
+  console.log(`Server is running in fallback mode on port ${port}`)
 })

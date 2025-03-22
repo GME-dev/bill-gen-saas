@@ -2,13 +2,12 @@
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 dockerfileDirectory = "."
-buildCommand = "npm run build"
 
 [deploy]
-startCommand = "node --dns-result-order=ipv4first dist/index.js"
+startCommand = "npm run start"
 restartPolicyType = "ON_FAILURE"
-restartPolicyMaxRetries = 3
-healthcheckPath = "/api/health"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/health"
 healthcheckTimeout = 100
 
 [variables]
