@@ -1,5 +1,12 @@
 {
   "name": "bill-gen-saas",
   "version": "1.0.0",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.11",
+    "@types/winston": "^2.4.4"
+  }
 }

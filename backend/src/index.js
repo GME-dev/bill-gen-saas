@@ -1,68 +1,49 @@
-// Apply IPv4 fixes directly in the main application file
-try {
-  // Try to force IPv4 at the application level
-  const dnsModule = await import('dns');
-  if (typeof dnsModule.setDefaultResultOrder === 'function') {
-    dnsModule.setDefaultResultOrder('ipv4first');
-    console.log('Forced IPv4 DNS resolution in index.js');
-  }
-} catch (err) {
-  console.error('Failed to force IPv4 in index.js:', err);
-}
-
-import app from './app.js'
+import express from 'express'
+import cors from 'cors'
 import { initializeDatabase } from './utils/database.js'
-import dotenv from 'dotenv'
+import billsRouter from './routes/bills.js'
+import bikeModelsRouter from './routes/bike-models.js'
+import healthRouter from './routes/health.js'
+import billsRoutes from './routes/bills.js'
 
-// Load environment variables
-dotenv.config()
-
+const app = express()
 const port = process.env.PORT || 3000
-let server
-let dbInitialized = false
 
-console.log('Starting server with environment:', process.env.NODE_ENV);
-console.log('CORS origin:', process.env.CORS_ORIGIN);
-console.log('Port:', port);
+// Middleware
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type']
+}))
 
-async function startServer() {
-  // Always start the server first, so health checks can pass
-  server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`)
+app.use(express.json())
+
+// Initialize database connection
+initializeDatabase()
+  .then(() => {
+    console.log('Database connection initialized')
   })
-
-  // Handle graceful shutdown
-  process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Shutting down gracefully...')
-    server.close(() => {
-      console.log('Server closed')
-      process.exit(0)
-    })
-  })
-
-  // Try to initialize database but don't let it crash the startup
-  try {
-    console.log('Initializing database connection...')
-    await initializeDatabase()
-    console.log('Database connection established')
-    dbInitialized = true
-  } catch (error) {
+  .catch(error => {
     console.error('Failed to initialize database:', error)
-    console.log('Server will continue running - health checks may temporarily fail')
-    
-    // Retry database connection every 10 seconds
-    const retryInterval = setInterval(async () => {
-      try {
-        console.log('Retrying database connection...')
-        await initializeDatabase()
-        console.log('Database connection established after retry')
-        dbInitialized = true
-        clearInterval(retryInterval)
-      } catch (error) {
-        console.error('Database connection retry failed:', error)
-      }
-    }, 10000)
-  }
-}
+    process.exit(1)
+  })
 
-startServer()
+// Routes
+app.use('/api/bills', billsRouter)
+app.use('/api/bike-models', bikeModelsRouter)
+app.use('/health', healthRouter)
+
+// Add direct PDF routes
+// Direct PDF routes
+app.get('/api/bills/:id/pdf', (req, res) => {
+  billsRoutes.handle(req, res);
+});
+
+app.get('/api/bills/preview/pdf', (req, res) => {
+  billsRoutes.handle(req, res);
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`Server is running on port ${port}`)
+})

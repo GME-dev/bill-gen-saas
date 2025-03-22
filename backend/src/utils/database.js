@@ -6,34 +6,22 @@ import dns from 'dns';
 dotenv.config();
 
 // Force Node.js to prefer IPv4 addresses
-try {
-  dns.setDefaultResultOrder('ipv4first');
-  console.log('Setting DNS resolution preference to IPv4 first');
-} catch (error) {
-  console.warn('Failed to set DNS resolution order:', error.message);
-}
+dns.setDefaultResultOrder('ipv4first');
+console.log('Forced IPv4 DNS resolution in index.js');
 
 // Connection variables
 let client = null;
 let db = null;
 let connectionAttempts = 0;
 const MAX_CONNECTION_ATTEMPTS = 5;
-let initializationPromise = null;
 
 export async function initializeDatabase() {
-  // If there's already an initialization in progress, return that promise
-  if (initializationPromise) {
-    return initializationPromise;
-  }
-
-  // If database is already initialized, return it
   if (db) {
     console.log('Database already initialized');
     return db;
   }
 
-  // Create a new initialization promise
-  initializationPromise = (async () => {
+  while (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
     try {
       connectionAttempts++;
       console.log(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
@@ -70,17 +58,14 @@ export async function initializeDatabase() {
         stack: error.stack
       });
       
-      db = null;
-      
       if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
         console.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`);
-        initializationPromise = null;
         throw error;
       }
       
       console.log(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
-      
-      // If we fail, close the client if it exists
+      // If we fail, we'll retry on the next request
+      db = null;
       if (client) {
         try {
           await client.close();
@@ -89,12 +74,8 @@ export async function initializeDatabase() {
         }
         client = null;
       }
-      
-      return null;
     }
-  })();
-  
-  return initializationPromise;
+  }
 }
 
 export function getDatabase() {
@@ -116,19 +97,6 @@ export async function closeDatabase() {
     client = null;
     db = null;
     connectionAttempts = 0;
-    initializationPromise = null;
     console.log('Database connection closed');
   }
 }
-
-// Handle cleanup on application shutdown
-process.on('SIGINT', async () => {
-  await closeDatabase();
-  process.exit(0);
-});
-
-export default {
-  initializeDatabase,
-  getDatabase,
-  closeDatabase
-};
