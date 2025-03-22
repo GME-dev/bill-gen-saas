@@ -54,11 +54,17 @@ export class PDFGenerator {
                 chassis_number: bill.chassis_number || 'N/A',
                 bike_price: parseFloat(bill.bike_price) || 0,
                 bill_type: (bill.bill_type || 'CASH').toUpperCase(),
-                is_ebicycle: bill.is_ebicycle || false,
                 down_payment: parseFloat(bill.down_payment) || 0,
                 advance_amount: parseFloat(bill.advance_amount) || 0,
                 estimated_delivery_date: bill.estimated_delivery_date || null
             };
+
+            // Determine if this is an e-bicycle based on model name if not provided
+            if (bill.is_ebicycle === undefined) {
+                normalizedBill.is_ebicycle = await this.getModelIsEbicycle(normalizedBill.model_name);
+            } else {
+                normalizedBill.is_ebicycle = bill.is_ebicycle;
+            }
 
             // Create PDF document
             const pdfDoc = await PDFDocument.create();
@@ -522,9 +528,9 @@ export class PDFGenerator {
 
     formatAmount(amount) {
         if (amount === undefined || amount === null || isNaN(amount)) {
-            return '0.00';
+            return 'Rs. 0.00';
         }
-        return `${amount.toLocaleString()}.00`;
+        return `Rs. ${amount.toLocaleString()}.00`;
     }
 
     async getModelIsEbicycle(modelName) {
