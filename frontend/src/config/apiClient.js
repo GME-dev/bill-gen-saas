@@ -18,7 +18,7 @@ class ApiClient {
     
     this.axiosInstance = axios.create({
       baseURL: this.baseURL,
-      timeout: 30000,
+      timeout: 120000, // Increase timeout to 2 minutes for large responses like PDFs
       headers: {
         'Content-Type': 'application/json'
       }
@@ -55,43 +55,42 @@ class ApiClient {
       console.log('PDF request detected:', processedUrl);
       
       try {
-        // Check if using axios or fetch
-        if (config.responseType === 'blob' || config.responseType === 'arraybuffer') {
-          // Use axios for blob responses with proper responseType
-          console.log('Using axios for PDF with responseType:', config.responseType);
-          const response = await this.axiosInstance.get(processedUrl, {
-            ...config,
-            responseType: config.responseType || 'blob'
-          });
-          return response.data;
-        }
+        // Always use axios for PDF requests with blob responseType
+        console.log('Using axios for PDF with responseType: blob');
         
-        // Fallback to fetch API for PDF requests if no responseType specified
-        console.log('Using fetch API for PDF request');
-        const response = await fetch(this.getFullUrl(processedUrl), {
-          method: 'GET',
-          headers: this.getHeaders(),
-          ...config
+        // Create a custom instance with extended timeout for PDFs
+        const pdfAxiosInstance = axios.create({
+          baseURL: this.baseURL,
+          timeout: 240000, // 4 minutes timeout for PDFs
+          responseType: 'blob',
+          headers: {
+            'Accept': 'application/pdf'
+          }
         });
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`PDF request failed with status ${response.status}:`, errorText);
-          
-          try {
-            // Try to parse as JSON if possible
-            const errorJson = JSON.parse(errorText);
-            throw new Error(errorJson.error || errorJson.details || `Server returned status ${response.status}`);
-          } catch (parseError) {
-            // If not JSON, use the raw text or status
-            throw new Error(`PDF request failed with status ${response.status}: ${errorText.substring(0, 100)}`);
-          }
-        }
+        // Add a timestamp to prevent caching
+        const timestampedUrl = `${processedUrl}${processedUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
         
-        // Return the blob for preview/download
-        return await response.blob();
+        const response = await pdfAxiosInstance.get(timestampedUrl);
+        
+        // Verify we got a PDF
+        if (response.headers['content-type'] && 
+            response.headers['content-type'].includes('application/pdf')) {
+          return response.data;
+        } else if (response.data instanceof Blob) {
+          // Even without correct headers, if it's a blob, return it
+          return response.data;
+        } else {
+          throw new Error('Response is not a valid PDF');
+        }
       } catch (error) {
         console.error('Error fetching PDF:', error);
+        
+        // Create a more specific error message
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('PDF generation timed out. Please try again or generate a smaller document.');
+        }
+        
         throw error;
       }
     }

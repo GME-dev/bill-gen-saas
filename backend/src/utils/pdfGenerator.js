@@ -26,7 +26,8 @@ data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAACXBIWXMAAA
 `;
 
 const PDF_CACHE = new Map(); // Simple in-memory cache for generated PDFs
-const PDF_GENERATION_TIMEOUT = 15000; // 15 seconds timeout for PDF generation
+const PDF_GENERATION_TIMEOUT = 60000; // 60 seconds timeout for PDF generation
+const MAX_PDF_SIZE = 5 * 1024 * 1024; // 5MB limit for PDFs
 
 // Add a timeout wrapper function after the class definition
 async function withTimeout(promise, timeoutMs, errorMessage) {
@@ -152,76 +153,61 @@ export class PDFGenerator {
     }
 
     async generatePDF(bill) {
+        console.time(`PDF Generation Core for ${bill._id || 'preview'}`);
+        
         try {
-            // Create a normalized bill object with defaults for missing values
-            const normalizedBill = {
-                bill_number: bill.bill_number || bill._id || bill.id || 'PREVIEW',
-                bill_date: bill.bill_date || new Date(),
-                customer_name: bill.customer_name || 'N/A',
-                customer_nic: bill.customer_nic || 'N/A',
-                customer_address: bill.customer_address || 'N/A',
-                model_name: bill.model_name || 'N/A',
-                motor_number: bill.motor_number || 'N/A',
-                chassis_number: bill.chassis_number || 'N/A',
-                bike_price: parseFloat(bill.bike_price) || 0,
-                bill_type: (bill.bill_type || 'CASH').toUpperCase(),
-                down_payment: parseFloat(bill.down_payment) || 0,
-                advance_amount: parseFloat(bill.advance_amount) || 0,
-                estimated_delivery_date: bill.estimated_delivery_date || null
-            };
-
-            // Determine if this is an e-bicycle based on model name if not provided
-            if (bill.is_ebicycle === undefined) {
-                normalizedBill.is_ebicycle = await this.getModelIsEbicycle(normalizedBill.model_name);
-            } else {
-                normalizedBill.is_ebicycle = bill.is_ebicycle;
-            }
-
-            // Create PDF document
-            const pdfDoc = await PDFDocument.create();
+            // Create a new PDF document with optimized settings
+            const doc = new PDFDocument({
+                size: 'A4',
+                margin: 50,
+                bufferPages: true, // Buffer pages for better performance
+                compress: true,    // Compress the PDF
+                autoFirstPage: false // Don't create first page immediately for better performance
+            });
             
-            // Set document metadata
-            pdfDoc.setTitle(`TMR Invoice ${normalizedBill.bill_number}`);
-            pdfDoc.setAuthor('TMR TRADING LANKA (PVT) LIMITED');
-            pdfDoc.setSubject(`Invoice #${normalizedBill.bill_number}`);
-            pdfDoc.setKeywords(['invoice', 'bill', 'tmr', 'motorcycle', 'ebike']);
+            // Collect chunks in memory instead of using a large buffer
+            const chunks = [];
+            doc.on('data', chunk => chunks.push(chunk));
             
-            // Add page
-            const page = pdfDoc.addPage([this.pageWidth, this.pageHeight]);
-            const { width, height } = page.getSize();
+            // Create a promise that resolves when the document is complete
+            const pdfPromise = new Promise((resolve, reject) => {
+                doc.on('end', () => {
+                    const pdfBuffer = Buffer.concat(chunks);
+                    console.log(`PDF size: ${pdfBuffer.length / 1024}KB`);
+                    
+                    if (pdfBuffer.length > MAX_PDF_SIZE) {
+                        reject(new Error(`PDF is too large (${Math.round(pdfBuffer.length / 1024)}KB)`));
+                        return;
+                    }
+                    
+                    resolve(pdfBuffer);
+                });
+                doc.on('error', reject);
+            });
             
-            // Embed fonts
-            const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-            const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+            // Now add first page after event handlers are set up
+            doc.addPage();
             
-            // Start drawing from the top
-            let yPosition = height - this.margin;
+            // Load only essential fonts
+            await this.embedFonts(doc);
             
-            // Draw header with logo, company info, and bill details
-            yPosition = await this.drawHeader(pdfDoc, page, width, yPosition, normalizedBill, regularFont, boldFont);
+            // Set the header
+            this.drawHeader(doc, bill);
             
-            // Draw title and horizontal separator
-            yPosition = this.drawTitleAndSeparator(page, width, yPosition, normalizedBill, regularFont, boldFont);
+            // Draw the bill content with optimized rendering
+            await this.drawBillContent(doc, bill);
             
-            // Draw customer details section
-            yPosition = this.drawCustomerDetails(page, width, yPosition, normalizedBill, regularFont, boldFont);
+            // End the document - this triggers the 'end' event
+            doc.end();
             
-            // Draw vehicle details section
-            yPosition = this.drawVehicleDetails(page, width, yPosition, normalizedBill, regularFont, boldFont);
-            
-            // Draw payment details section with table
-            yPosition = this.drawPaymentDetails(page, width, yPosition, normalizedBill, regularFont, boldFont);
-            
-            // Draw terms and conditions
-            yPosition = this.drawTermsAndConditions(page, width, yPosition, normalizedBill, regularFont, boldFont);
-            
-            // Draw signatures and thank you message
-            this.drawSignaturesAndFooter(page, width, yPosition, normalizedBill, regularFont, boldFont);
-            
-            return await pdfDoc.save();
+            // Await the promise with the buffer
+            const result = await pdfPromise;
+            console.timeEnd(`PDF Generation Core for ${bill._id || 'preview'}`);
+            return result;
         } catch (error) {
-            console.error('Error generating PDF:', error);
-            throw new Error(`Failed to generate PDF: ${error.message}`);
+            console.error(`Error in PDF generation core: ${error.message}`);
+            console.timeEnd(`PDF Generation Core for ${bill._id || 'preview'}`);
+            throw error;
         }
     }
     
@@ -935,6 +921,19 @@ export class PDFGenerator {
             return await this.generateDocx(bill);
         }
         return await this.generatePDF(bill);
+    }
+
+    // Optimize font embedding to only load required fonts
+    async embedFonts(doc) {
+        try {
+            // Use a simplified font embedding approach
+            doc.registerFont('Regular', path.resolve('./src/assets/fonts/Roboto-Regular.ttf'));
+            doc.registerFont('Bold', path.resolve('./src/assets/fonts/Roboto-Bold.ttf'));
+            // Only load these two essential fonts
+        } catch (error) {
+            console.error('Error loading fonts:', error);
+            // Continue with default fonts if custom fonts fail
+        }
     }
 }
 
