@@ -34,11 +34,13 @@ export class PDFGenerator {
         // Spacing configuration
         this.spacing = {
             lineHeight: 15,           // Standard line height
-            paragraphSpace: 10,       // Space between paragraphs
-            sectionSpace: 30,         // Space between sections
+            paragraphSpace: 20,       // Increased space between paragraphs
+            sectionSpace: 40,         // Increased space between sections
             tableRowHeight: 25,       // Height of table rows
             columnPadding: 8,         // Padding inside table columns
             tableBorderWidth: 0.75,   // Width of table borders
+            termsSpacing: 60,         // Added specific spacing for terms section
+            signatureSpacing: 80      // Added specific spacing for signature section
         };
     }
 
@@ -631,8 +633,11 @@ export class PDFGenerator {
     }
     
     drawTermsAndConditions(page, width, startY, bill, regularFont, boldFont) {
+        // Add extra spacing before terms and conditions
+        startY -= this.spacing.termsSpacing;
+        
         // Section title
-        page.drawText('Terms and Conditions', {
+        page.drawText('Terms and Conditions:', {
             x: this.margin,
             y: startY,
             size: 12,
@@ -651,54 +656,36 @@ export class PDFGenerator {
         
         // Terms and conditions
         const terms = [
-            '1. All prices are inclusive of taxes.',
-            '2. Warranty is subject to terms and conditions.',
-            '3. This is a computer-generated document and does not require a signature.'
+            '1. All prices are in Sri Lankan Rupees.',
+            '2. Warranty is valid for 30 days from the issue date.',
+            '3. This is a computer-generated document and does not require a signature.',
+            '4. Please retain this invoice for future reference.'
         ];
         
-        // Add bill-specific terms
-        if (bill.bill_type === 'LEASING') {
-            terms.push('4. Balance amount will be settled by the leasing company.');
-        } else if (bill.bill_type === 'ADVANCE' && bill.estimated_delivery_date) {
-            terms.push(`4. Estimated delivery date: ${this.formatDate(bill.estimated_delivery_date)}`);
-        } else {
-            terms.push('4. RMV registration will be completed within 30 days.');
-        }
-        
         // Draw terms
-        let currentY = startY - 25;
+        let currentY = startY - 30;
         terms.forEach(term => {
             page.drawText(term, {
                 x: this.margin,
                 y: currentY,
-                size: 9,
+                size: 10,
                 font: regularFont,
-                color: COLOR_GRAY_DARK,
+                color: COLOR_BLACK,
             });
-            currentY -= this.spacing.lineHeight;
+            currentY -= this.spacing.lineHeight + 5; // Added extra spacing between terms
         });
         
-        // Return position for next section
+        // Return position for next section with extra spacing
         return currentY - this.spacing.sectionSpace;
     }
     
     drawSignaturesAndFooter(page, width, startY, bill, regularFont, boldFont) {
-        // Ensure enough space from the bottom
-        const signatureY = Math.min(startY - 20, 140);
+        // Add extra spacing before signatures
+        startY -= this.spacing.signatureSpacing;
         
-        // Thank you message (centered)
-        const thankYouText = 'Thank you for your business!';
-        const thankYouWidth = boldFont.widthOfTextAtSize(thankYouText, 12);
+        // Draw signature lines with more spacing
+        const signatureY = startY;
         
-        page.drawText(thankYouText, {
-            x: (width - thankYouWidth) / 2,
-            y: signatureY + 40,
-            size: 12,
-            font: boldFont,
-            color: COLOR_ACCENT,
-        });
-        
-        // Signature lines
         // Dealer signature (left)
         page.drawLine({
             start: { x: this.margin, y: signatureY },
@@ -707,7 +694,7 @@ export class PDFGenerator {
             color: COLOR_BLACK,
         });
         
-        page.drawText('Dealer Signature', {
+        page.drawText('Authorized Signature', {
             x: this.margin + 30,
             y: signatureY - 15,
             size: 10,
@@ -731,8 +718,20 @@ export class PDFGenerator {
             color: COLOR_BLACK,
         });
         
+        // Thank you message (centered)
+        const thankYouText = 'Thank you for your business!';
+        const thankYouWidth = boldFont.widthOfTextAtSize(thankYouText, 12);
+        
+        page.drawText(thankYouText, {
+            x: (width - thankYouWidth) / 2,
+            y: signatureY - 50, // Moved below signatures
+            size: 12,
+            font: boldFont,
+            color: COLOR_ACCENT,
+        });
+        
         // Footer
-        const footerY = 50;
+        const footerY = this.margin;
         const footerText = 'TMR TRADING LANKA (PVT) LIMITED - Your trusted partner in electric mobility';
         const footerWidth = regularFont.widthOfTextAtSize(footerText, 8);
         
