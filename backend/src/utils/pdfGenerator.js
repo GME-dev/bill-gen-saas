@@ -330,7 +330,7 @@ export class PDFGenerator {
                 ['Down Payment', this.formatAmount(bill.down_payment)], font);
             
             // Total is down payment for leasing
-            this.drawTableBorderedRow(page, this.margin, currentY,
+            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
                 ['Total Amount', `${this.formatAmount(bill.down_payment)} (D/P)`], boldFont, true);
         }
         // For advance payment bills
@@ -342,12 +342,12 @@ export class PDFGenerator {
             currentY = this.drawTableBorderedRow(page, this.margin, currentY,
                 ['Balance Amount', this.formatAmount(balance)], font);
             
-            this.drawTableBorderedRow(page, this.margin, currentY,
+            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
                 ['Total Amount', this.formatAmount(totalAmount)], boldFont, true);
         }
         // For cash bills
         else {
-            this.drawTableBorderedRow(page, this.margin, currentY,
+            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
                 ['Total Amount', this.formatAmount(totalAmount)], boldFont, true);
         }
 
@@ -355,6 +355,9 @@ export class PDFGenerator {
     }
 
     drawTermsAndSignature(page, width, startY, bill, font, boldFont) {
+        // Add proper spacing between sections
+        startY = startY - 40;
+        
         // Terms and conditions
         page.drawText('Terms and Conditions:', {
             x: this.margin,
@@ -385,8 +388,10 @@ export class PDFGenerator {
             });
         });
 
-        // Signature section
-        const signatureY = this.margin + 60;
+        // Calculate signature position with proper spacing
+        // Make sure it's at least 100px below the last term
+        const lastTermY = startY - (terms.length * 20);
+        const signatureY = Math.min(lastTermY - 100, this.margin + 100);
         
         // Left signature
         page.drawLine({
@@ -396,7 +401,7 @@ export class PDFGenerator {
             color: rgb(0, 0, 0),
         });
         page.drawText('Authorized Signature', {
-            x: this.margin,
+            x: this.margin + 20,
             y: signatureY - 15,
             size: 10,
             font: font,
@@ -410,18 +415,18 @@ export class PDFGenerator {
             color: rgb(0, 0, 0),
         });
         page.drawText('Customer Signature', {
-            x: width - this.margin - 150,
+            x: width - this.margin - 130,
             y: signatureY - 15,
             size: 10,
             font: font,
         });
 
-        // Thank you message
+        // Thank you message - properly spaced from signatures
         const thankYouText = 'Thank you for your business!';
         const thankYouWidth = font.widthOfTextAtSize(thankYouText, 12);
         page.drawText(thankYouText, {
             x: (width - thankYouWidth) / 2,
-            y: this.margin + 30,
+            y: signatureY - 50,
             size: 12,
             font: boldFont,
         });
@@ -459,6 +464,47 @@ export class PDFGenerator {
             return 'Rs. 0.00';
         }
         return `Rs. ${amount.toLocaleString()}.00`;
+    }
+
+    // Helper method to draw table rows with borders - improved version
+    drawTableBorderedRow(page, x, y, columns, font, isTotal = false) {
+        const colWidths = [150, 250];
+        const rowHeight = 25;
+        const padding = 10;
+
+        // Draw outer rectangle
+        page.drawRectangle({
+            x,
+            y: y - rowHeight,
+            width: colWidths[0] + colWidths[1],
+            height: rowHeight,
+            borderWidth: 1,
+            borderColor: rgb(0, 0, 0),
+            color: isTotal ? rgb(0.95, 0.95, 0.95) : rgb(1, 1, 1),
+        });
+
+        // Draw vertical divider
+        page.drawLine({
+            start: { x: x + colWidths[0], y },
+            end: { x: x + colWidths[0], y: y - rowHeight },
+            thickness: 1,
+            color: rgb(0, 0, 0),
+        });
+
+        // Draw text
+        columns.forEach((text, index) => {
+            const textX = x + (index === 0 ? padding : colWidths[0] + padding);
+            const textY = y - rowHeight + (rowHeight - 12) / 2;
+            
+            page.drawText(text || '', {
+                x: textX,
+                y: textY,
+                size: 12,
+                font: font,
+            });
+        });
+
+        return y - rowHeight;
     }
 }
 
