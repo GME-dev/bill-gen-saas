@@ -42,7 +42,12 @@ const BillView = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'N/A';
+    }
   };
 
   const getStatusBadgeClass = (status) => {
@@ -289,11 +294,16 @@ const BillView = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card title="Bill Details" className="mb-6">
           <Descriptions bordered column={1}>
-            <Descriptions.Item label="Bill Number">{bill._id || bill.id}</Descriptions.Item>
+            <Descriptions.Item label="Bill Number">{bill.bill_number || bill._id || bill.id}</Descriptions.Item>
             <Descriptions.Item label="Bill Date">{formatDate(bill.bill_date)}</Descriptions.Item>
-            <Descriptions.Item label="Bill Type">{bill.bill_type}</Descriptions.Item>
-            <Descriptions.Item label="Status">{bill.status}</Descriptions.Item>
-            {bill.is_advance_payment && (
+            <Descriptions.Item label="Bill Type">{getBillTypeTag(bill.bill_type)}</Descriptions.Item>
+            <Descriptions.Item label="Status">
+              <Badge 
+                status={getStatusBadgeClass(bill.status)} 
+                text={bill.status} 
+              />
+            </Descriptions.Item>
+            {(bill.bill_type === 'advance' || bill.bill_type === 'advancement') && (
               <Descriptions.Item label="Estimated Delivery Date">
                 {formatDate(bill.estimated_delivery_date)}
               </Descriptions.Item>
@@ -313,24 +323,26 @@ const BillView = () => {
           <Descriptions bordered column={1}>
             <Descriptions.Item label="Model">{bill.model_name}</Descriptions.Item>
             <Descriptions.Item label="Type">
-              {bill.is_ebicycle ? 'E-bicycle' : 'E-bike'}
+              {bill.vehicle_type || (bill.is_ebicycle ? 'E-Bicycle' : 'Bicycle')}
             </Descriptions.Item>
-            <Descriptions.Item label="Motor Number">{bill.motor_number}</Descriptions.Item>
-            <Descriptions.Item label="Chassis Number">{bill.chassis_number}</Descriptions.Item>
+            <Descriptions.Item label="Motor Number">{bill.motor_number || 'N/A'}</Descriptions.Item>
+            <Descriptions.Item label="Chassis Number">{bill.chassis_number || 'N/A'}</Descriptions.Item>
           </Descriptions>
         </Card>
 
         <Card title="Payment Information" className="mb-6">
           <Descriptions bordered column={1}>
             <Descriptions.Item label="Bike Price">{formatAmount(bill.bike_price)}</Descriptions.Item>
-            <Descriptions.Item label="RMV Charge">{formatAmount(bill.rmv_charge)}</Descriptions.Item>
+            {!bill.is_ebicycle && bill.bill_type === 'cash' && (
+              <Descriptions.Item label="RMV Charge">Rs. 13,000</Descriptions.Item>
+            )}
             <Descriptions.Item label="Total Amount">{formatAmount(bill.total_amount)}</Descriptions.Item>
-            {bill.is_advance_payment && (
+            {(bill.bill_type === 'advance' || bill.bill_type === 'advancement') && (
               <>
-                <Descriptions.Item label="Advance Amount">{formatAmount(bill.advance_amount)}</Descriptions.Item>
+                <Descriptions.Item label="Down Payment">{formatAmount(bill.down_payment)}</Descriptions.Item>
                 <Descriptions.Item label="Balance Amount">{formatAmount(bill.balance_amount)}</Descriptions.Item>
-                </>
-              )}
+              </>
+            )}
             {bill.bill_type === 'leasing' && (
               <Descriptions.Item label="Down Payment">{formatAmount(bill.down_payment)}</Descriptions.Item>
             )}

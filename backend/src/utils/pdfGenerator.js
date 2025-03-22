@@ -25,6 +25,25 @@ const INLINE_LOGO_BASE64 = `
 data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAACXBIWXMAAAsTAAALEwEAmpwYAAAF8UlEQVR4nO2dW4xdUxSGv2oqpVW0qpRWlUYvImoQl4inxiUu8SASL4QHcU0QQkQiIiIhQoJIExEPHoiHeGiCuIQEFXFpXaiSUrRV1Oi1NJmx/WSfOPvM3mfttfY6xzOTb5LJw1pr7vbPWmuvvfY6kMlkMplMJpPJZDKZTEbNBGAJcA9wP/AocCMws8qgMmMZD9wNfAcMl/z9BKwHVlQVYKY5VwBvl5Cw0VsNnJt6AJm/OB14PYKEjd5aYG6qQWXG8TCwL6KMDb8buDXFwDLhPxVHExtL+iFwetlBZsDawJiQ1dtMhUo+GZxdg4yN3m6q0LAdKcSLLwQwqYYgo3nLgcOqEZLp1YCwJuCqfkjZ6PUpR5Lqb95e4MoaBdXlLVLWkGsC/YeAZxLIQeD9b3Rv44DV2P7vB3YBXwCrgLkxhUwFBiz5fZjoDaopFwAbLOMaAF4AjgmNvs0i4GdLcTM9xmwJ0tWeSJj/JYZk9mCesTIN7RjDb/HUhgRQ/o3Z2zHNcD2wzZCpTcYX0AeCWJo0uRsdMuTzVx74EUU/FKK8P0FpD6nWcbkhq+lB3gvY51ZHLrOB3w059rlkyzLJkTkGGRst1iXLUvNKPP+z/M5zPDN2RiR9q8VvALjXku0Tl7FoJzAYJGSV8NwTxE9GN1pTgsssuR4zBNJrOTbjkbNS4wHqC4HnRBmTDG/1FyPuuTFyjS9acp0Afku+ILGmiOudxlxWFa7ZHlFEe0pWrPPzgX3CWNYL125wzLm9UEOkMZZaVtR1K+o5O7KIBxzjvlxwbQLwgyBmW7uKR1KI2OFQXr8VOCKC9wnA+5EFHASucIzfLtIfKbJQe+pYG2nwS4CvCteuC1TxfERx7TIV4gjgS0HM6wX3AElXvE2JMPhngPMKz20BHtD6AXI9kOMxwbWO3fMjHn9n+aDUmKrHvRF9vSCfGXJMUWy3AIsEvwZ6Vc82qYY8o3ThOQAM4+9ThxxTEmy3zBLk/EtT/t8pPLBGcHNKd4IM9d9Nmi3Ag4b7dgoyfgPsT7BtvFJw9TBwiG2Gy4UHNwlufuDIE0uQzc3bOw5e3JlYRrdmgm2O3YIMOXOmOPO7Xnj4F8FNLeqCyILc45AjdAKoW4fvddz/qiDnVeKKqDTBU5zHzRHcSrMrDUFOVcjQSrvXTU1Bd/cSYrtQj6QYM87pnNmtbDiWTJBJCjluFGSw+YL2U8F2+1ZF4cC5PQSZ7pgKnN1LkPWKeBYrMjvLJMimkszrAm5MFEMt1RQEOEohy1xBBtubEVZaRLkiUxqFIHcpZJHmGf9uy3C3ItOzW1WQS5TyzBBkMHmbiigrMyPtw8UQZFLCFe9HCrkuFuQYMLw51iwNFNLtB6QJpBROFsZyQJDFrJDUvJQXZ3mXJYhNkIkJV7wTHbJsEOQxNbV0E0TrTJy5XR0Q5JCERQpXvL5ByeZIYLoLsEbQCfr28YbXmvJEFMQmyjHKOBdGbLTvEuQxXlPsBRkPHJcwgaMdsuxRvLmmWSLLgGnKAMTGZuKRKg35UpH1FcFxR6FrmCCmvjdnW3d9F47t7A2O7xCXVdnVYvuGl1nkIE0aNYvy2ZExPlNyb3N1Yb/CMaZTDN+itjG9w1GcV8UdVqXpbfsGrRDGEXsP5i3HxFez0nbK6WPi9BnCkiHttvBZygH5VD6Oq/LNXYT4TnRb2w8RRXSnQltm1JQ5dTU/NbrGBaRDrJm9tYhLbXWSlQnKnQFh46qjGjCx5qBieQeM29o1XTa3QfnWvB3IWYtakI9VCKE96pWakZxeQzClvQ3ITRVMqCG4PuDcFOOeKMyqYaelO3pVQ1bgz0fauOvKZFQLDUzVnL5vZM2qMj12jyvgCl3UVauoI6v9wnPjHDPbpbwMnJNyAJm/OZ441VZfA1eRMUzXPxp+I3AesXrJmUwmk8lkMplMJpPJZBoH/An2leGCSHQxqwAAAABJRU5ErkJggg==
 `;
 
+const PDF_CACHE = new Map(); // Simple in-memory cache for generated PDFs
+const PDF_GENERATION_TIMEOUT = 15000; // 15 seconds timeout for PDF generation
+
+// Add a timeout wrapper function after the class definition
+async function withTimeout(promise, timeoutMs, errorMessage) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(errorMessage || `Operation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export class PDFGenerator {
     constructor() {
         this.fontManager = fontManager
@@ -49,13 +68,43 @@ export class PDFGenerator {
 
     async generateBill(bill, format = 'pdf') {
         try {
-            if (format === 'docx') {
-                return await this.generateDocx(bill);
+            console.time(`PDF Generation for ${bill._id || 'preview'}`);
+            
+            // Check cache first for non-preview bills
+            const cacheKey = bill._id ? `${bill._id}-${format}` : null;
+            if (cacheKey && PDF_CACHE.has(cacheKey)) {
+                console.log(`Using cached PDF for bill ${bill._id}`);
+                console.timeEnd(`PDF Generation for ${bill._id || 'preview'}`);
+                return PDF_CACHE.get(cacheKey);
             }
-            return await this.generatePDF(bill);
+            
+            console.log(`Starting PDF generation for bill ${bill._id || 'preview'}`);
+            
+            // Create a promise for the PDF generation
+            const pdfPromise = this._generateBillInternal(bill, format);
+            
+            // Add timeout to prevent hanging
+            const result = await withTimeout(
+                pdfPromise, 
+                PDF_GENERATION_TIMEOUT,
+                `PDF generation timed out for bill ${bill._id || 'preview'}`
+            );
+            
+            // Cache the result for non-preview bills
+            if (cacheKey) {
+                PDF_CACHE.set(cacheKey, result);
+                // Limit cache size to 100 entries
+                if (PDF_CACHE.size > 100) {
+                    const firstKey = PDF_CACHE.keys().next().value;
+                    PDF_CACHE.delete(firstKey);
+                }
+            }
+            
+            console.timeEnd(`PDF Generation for ${bill._id || 'preview'}`);
+            return result;
         } catch (error) {
-            console.error(`Error generating ${format.toUpperCase()}:`, error);
-            throw error;
+            console.error(`Error generating ${format.toUpperCase()} for bill ${bill._id || 'preview'}:`, error);
+            throw new Error(`Failed to generate ${format.toUpperCase()}: ${error.message}`);
         }
     }
 
@@ -815,9 +864,16 @@ export class PDFGenerator {
     
     formatDate(dateString) {
         if (!dateString) return 'N/A';
+        
+        // If dateString is already a Date object, convert it to ISO string
+        if (dateString instanceof Date) {
+            dateString = dateString.toISOString();
+        }
+        
         try {
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return 'N/A';
+            
             return date.toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -837,38 +893,48 @@ export class PDFGenerator {
     }
     
     async getModelIsEbicycle(modelName) {
+        if (!modelName) return false;
+        
+        const modelString = String(modelName || '').trim();
+        
+        // Quick check for known e-bicycle models
+        const isCola5 = 
+            modelString.toUpperCase().includes('COLA5') || 
+            modelString.toLowerCase().includes('cola5');
+            
+        const isX01 = 
+            modelString.toUpperCase().includes('X01') || 
+            modelString.toLowerCase().includes('x01');
+        
+        // Default check based on model name
+        let isEbicycle = isCola5 || isX01;
+        
+        // Double-check database for is_ebicycle flag
         try {
-            if (!modelName) return false;
+            const db = getDatabase();
+            const bikeModel = await db.collection('bike_models').findOne({
+                model_name: { $regex: modelString, $options: 'i' }
+            });
             
-            // Special case handling for e-bicycles
-            const modelNameUpper = modelName.toUpperCase();
-            if (modelNameUpper.includes('COLA5') || modelNameUpper.includes('X01')) {
-                console.log(`Model ${modelName} identified as e-bicycle by name pattern`);
-                return true;
-            }
-            
-            // Database lookup
-            try {
-                const db = getDatabase();
-                const result = await db.query(
-                    'SELECT is_ebicycle FROM bike_models WHERE model_name = $1',
-                    [modelName]
-                );
+            if (bikeModel) {
+                const dbIsEbicycle = bikeModel.is_ebicycle;
+                console.log(`🔎 Database is_ebicycle flag for ${modelString}: ${dbIsEbicycle}`);
                 
-                if (result.rows.length > 0) {
-                    return result.rows[0].is_ebicycle;
-                }
-            } catch (dbError) {
-                console.error('Database error checking model type:', dbError);
-                // Continue with fallback
+                // If DB says it's an e-bicycle, respect that too
+                isEbicycle = isEbicycle || dbIsEbicycle;
             }
-            
-            // Fallback to false
-            return false;
         } catch (error) {
-            console.error('Error determining if model is e-bicycle:', error);
-            return false;
+            console.error('Error checking database for is_ebicycle:', error);
         }
+        
+        return isEbicycle;
+    }
+
+    async _generateBillInternal(bill, format = 'pdf') {
+        if (format === 'docx') {
+            return await this.generateDocx(bill);
+        }
+        return await this.generatePDF(bill);
     }
 }
 

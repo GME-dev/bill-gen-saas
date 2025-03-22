@@ -27,7 +27,8 @@ const BillEdit = () => {
   const fetchBill = async () => {
     try {
       setLoading(true);
-      const data = await apiClient.get(`/api/bills/${id}`);
+      console.log(`Fetching bill with ID: ${id}`);
+      const data = await apiClient.get(`/bills/${id}`);
       
       if (!data) {
         toast.error('Bill not found');
@@ -35,9 +36,13 @@ const BillEdit = () => {
         return;
       }
       
+      console.log('Bill data received:', data);
       setBill(data);
       setBillType(data.bill_type?.toLowerCase() || 'cash');
-      setIsAdvancePayment(data.is_advance_payment || false);
+      setIsAdvancePayment(
+        data.bill_type === 'advance' || 
+        data.bill_type === 'advancement'
+      );
       
       // Format dates for the form
       const formValues = {
@@ -49,7 +54,8 @@ const BillEdit = () => {
       form.setFieldsValue(formValues);
     } catch (error) {
       console.error('Error fetching bill:', error);
-      toast.error('Failed to fetch bill details');
+      toast.error(`Failed to fetch bill details: ${error.message || 'Unknown error'}`);
+      navigate('/bills');
     } finally {
       setLoading(false);
     }
@@ -57,17 +63,19 @@ const BillEdit = () => {
 
   const fetchBikeModels = async () => {
     try {
-      const data = await apiClient.get('/api/bike-models');
-      setBikeModels(data);
+      const data = await apiClient.get('/bike-models');
+      console.log('Bike models received:', data);
+      setBikeModels(data || []);
       
       // Set selected model if bill is loaded
       if (bill && bill.model_name) {
-        const model = data.find(m => m.model_name === bill.model_name);
+        const model = data?.find(m => m.model_name === bill.model_name);
         setSelectedModel(model);
       }
     } catch (error) {
       console.error('Error fetching bike models:', error);
-      message.error('Failed to fetch bike models');
+      toast.error('Failed to fetch bike models');
+      setBikeModels([]);
     }
   };
 
@@ -85,59 +93,64 @@ const BillEdit = () => {
   const handleSubmit = async (values) => {
     try {
       setSubmitting(true);
+      console.log('Submitting bill update with values:', values);
       
       // Get the selected model's price if bike_price is missing
       const bikePrice = values.bike_price || (selectedModel ? selectedModel.price : 0);
+      
+      // Is this an e-bicycle?
+      const modelString = String(values.model_name || '').trim();
+      const isEbicycle = 
+        selectedModel?.is_ebicycle || 
+        modelString.toUpperCase().includes('COLA5') || 
+        modelString.toLowerCase().includes('cola5') ||
+        modelString.toUpperCase().includes('X01') || 
+        modelString.toLowerCase().includes('x01');
+      
+      // Normalize bill type
+      const normalizedBillType = billType === 'advancement' ? 'advance' : billType;
       
       // Prepare data for update
       const updateData = {
         ...values,
         bike_price: bikePrice,
-        bill_type: billType.toUpperCase(),
-        is_advance_payment: isAdvancePayment,
-        is_ebicycle: selectedModel?.is_ebicycle || false,
+        bill_type: normalizedBillType,
+        is_ebicycle: isEbicycle,
+        vehicle_type: isEbicycle ? 'E-Bicycle' : 'Bicycle',
         bill_date: values.bill_date ? values.bill_date.toISOString() : new Date().toISOString(),
         estimated_delivery_date: values.estimated_delivery_date ? values.estimated_delivery_date.toISOString() : null
       };
 
       // Calculate total amount based on bill type and model
-      if (billType === 'cash') {
-        updateData.total_amount = selectedModel?.is_ebicycle 
+      if (normalizedBillType === 'cash') {
+        updateData.total_amount = isEbicycle 
           ? parseFloat(bikePrice) 
           : parseFloat(bikePrice) + 13000;
-        updateData.rmv_charge = selectedModel?.is_ebicycle ? 0 : 13000;
-      } else {
+      } else if (normalizedBillType === 'leasing') {
         // For leasing, ensure down_payment is properly set
         const downPayment = parseFloat(values.down_payment || 0);
-        updateData.total_amount = selectedModel?.price || bikePrice; // Store the full bike price
+        updateData.total_amount = downPayment; 
         updateData.down_payment = downPayment;
-        updateData.rmv_charge = 13500;
-        updateData.is_cpz = true;
+      } else if (normalizedBillType === 'advance') {
+        // For advance payments
+        updateData.total_amount = parseFloat(bikePrice);
+        const downPayment = parseFloat(values.down_payment || 0);
+        updateData.down_payment = downPayment;
+        updateData.balance_amount = updateData.total_amount - downPayment;
       }
-
-      // Handle advance payment
-      if (isAdvancePayment) {
-        const advanceAmount = parseFloat(values.advance_amount || 0);
-        updateData.advance_amount = advanceAmount;
-        
-        if (billType === 'cash') {
-          updateData.balance_amount = updateData.total_amount - advanceAmount;
-        } else {
-          updateData.balance_amount = updateData.down_payment - advanceAmount;
-        }
-      }
-
-      const response = await apiClient.put(`/api/bills/${id}`, updateData);
+      
+      console.log('Sending update data:', updateData);
+      const response = await apiClient.put(`/bills/${id}`, updateData);
       
       if (response) {
         toast.success('Bill updated successfully');
         navigate(`/bills/${id}`);
       } else {
-        throw new Error('Failed to update bill');
+        throw new Error('Failed to update bill: No response received');
       }
     } catch (error) {
       console.error('Error updating bill:', error);
-      toast.error('Failed to update bill');
+      toast.error(`Failed to update bill: ${error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }
@@ -196,18 +209,12 @@ const BillEdit = () => {
             <Select
               value={billType}
               onChange={(value) => setBillType(value)}
-              disabled={selectedModel?.is_ebicycle}
+              disabled={selectedModel?.is_ebicycle && value === 'leasing'}
               options={[
                 { label: 'Cash', value: 'cash' },
-                { label: 'Leasing', value: 'leasing', disabled: selectedModel?.is_ebicycle }
+                { label: 'Leasing', value: 'leasing', disabled: selectedModel?.is_ebicycle },
+                { label: 'Advance Payment', value: 'advance' }
               ]}
-            />
-          </Form.Item>
-
-          <Form.Item label="Advance Payment">
-            <Switch
-              checked={isAdvancePayment}
-              onChange={setIsAdvancePayment}
             />
           </Form.Item>
 
@@ -230,25 +237,33 @@ const BillEdit = () => {
             </Form.Item>
           )}
 
-          {isAdvancePayment && (
-            <Form.Item
-              name="advance_amount"
-              label="Advance Amount"
-              rules={[{ required: true, message: 'Please enter the advance amount' }]}
-            >
-              <InputNumber
-                className="w-full"
-                min={1}
-                step={1}
-                formatter={value => `Rs. ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={value => {
-                  // Clean the input value from non-numeric characters
-                  const cleanValue = value.replace(/[^\d]/g, '');
-                  // Return a number, or 1 if empty
-                  return cleanValue ? parseInt(cleanValue, 10) : 1;
-                }}
-              />
-            </Form.Item>
+          {billType === 'advance' && (
+            <>
+              <Form.Item
+                name="down_payment"
+                label="Down Payment"
+                rules={[{ required: true, message: 'Please enter the down payment amount' }]}
+              >
+                <InputNumber
+                  className="w-full"
+                  min={1000}
+                  step={1000}
+                  formatter={value => `Rs. ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => {
+                    const parsed = value.replace(/[^\d]/g, '');
+                    return parsed ? parseInt(parsed) : 1000;
+                  }}
+                />
+              </Form.Item>
+              
+              <Form.Item
+                name="estimated_delivery_date"
+                label="Estimated Delivery Date"
+                rules={[{ required: true, message: 'Please enter the estimated delivery date' }]}
+              >
+                <DatePicker className="w-full" />
+              </Form.Item>
+            </>
           )}
 
           <Form.Item
@@ -297,15 +312,6 @@ const BillEdit = () => {
           >
             <DatePicker className="w-full" />
           </Form.Item>
-
-          {isAdvancePayment && (
-            <Form.Item
-              name="estimated_delivery_date"
-              label="Estimated Delivery Date"
-            >
-              <DatePicker className="w-full" />
-            </Form.Item>
-          )}
 
           <Form.Item className="flex justify-end">
             <Button 

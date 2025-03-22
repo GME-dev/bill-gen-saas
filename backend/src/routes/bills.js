@@ -187,7 +187,57 @@ router.get('/:id', validateObjectId(), async (req, res) => {
   }
 })
 
-// Create a new bill
+// Add this function after the other middleware functions
+async function generateSequentialBillNumber() {
+  try {
+    const db = getDatabase();
+    if (!db) {
+      console.error('Cannot generate bill number: No database connection');
+      return null;
+    }
+    
+    // Get current date components for the prefix
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2); // Last 2 digits of year
+    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // Month (01-12)
+    
+    // Find the last bill created and get its number
+    const lastBill = await db.collection('bills')
+      .find({})
+      .sort({ bill_date: -1, _id: -1 })
+      .limit(1)
+      .toArray();
+    
+    let sequenceNum = 1; // Default starting point
+    
+    if (lastBill && lastBill.length > 0 && lastBill[0].bill_number) {
+      // Try to extract the sequence number from the last bill
+      const lastBillNumber = lastBill[0].bill_number;
+      console.log(`Last bill number found: ${lastBillNumber}`);
+      
+      // Extract the numeric part if it exists
+      const match = lastBillNumber.match(/\d+$/);
+      if (match) {
+        sequenceNum = parseInt(match[0], 10) + 1;
+      }
+    } else {
+      console.log('No previous bills found or no bill_number, starting with sequence #1');
+    }
+    
+    // Format: TMR-YY-MM-XXXX (e.g., TMR-23-05-0001)
+    const billNumber = `TMR-${year}-${month}-${sequenceNum.toString().padStart(4, '0')}`;
+    console.log(`Generated sequential bill number: ${billNumber}`);
+    
+    return billNumber;
+  } catch (error) {
+    console.error('Error generating sequential bill number:', error);
+    // Fallback to a timestamp-based number in case of errors
+    return `TMR-${Date.now()}`;
+  }
+}
+
+// Now modify the create bill route to use this new function
+// Replace or update the post route for creating a new bill
 router.post('/', async (req, res) => {
   try {
     console.log('Creating bill with data:', req.body);
@@ -210,12 +260,19 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
+    // Generate a sequential bill number
+    const bill_number = await generateSequentialBillNumber();
+    if (!bill_number) {
+      return res.status(500).json({ error: 'Failed to generate bill number' });
+    }
+    
     // Parse numeric values safely
     const down_payment = req.body.down_payment ? parseFloat(req.body.down_payment) : 0;
     const safe_bike_price = parseFloat(bike_price) || 0;
     
     // 🔎 SYSTEM-WIDE DEBUG - Log exactly what we're working with
     console.log('🔎 BILL CREATION DEBUG:');
+    console.log('- Bill Number:', bill_number);
     console.log('- Model Name:', model_name);
     console.log('- Bike Price:', safe_bike_price);
     console.log('- Down Payment:', down_payment);
@@ -304,13 +361,14 @@ router.post('/', async (req, res) => {
     const status = is_advancement ? 'pending' : 'completed';
     
     console.log('Executing query with:', {
-      normalized_bill_type, customer_name, customer_nic, customer_address,
+      bill_number, normalized_bill_type, customer_name, customer_nic, customer_address,
       model_name, motor_number, chassis_number, safe_bike_price,
       down_payment, today, total_amount, balance_amount, 
       estimated_delivery_date, status
     });
     
     const newBill = {
+      bill_number,
       bill_type: normalized_bill_type,
       customer_name,
       customer_nic,
@@ -324,7 +382,9 @@ router.post('/', async (req, res) => {
       total_amount,
       balance_amount,
       estimated_delivery_date: estimated_delivery_date ? new Date(estimated_delivery_date) : null,
-      status
+      status,
+      is_ebicycle: isEbicycle,
+      vehicle_type: isEbicycle ? 'E-Bicycle' : 'Bicycle'
     };
     
     const result = await db.collection('bills').insertOne(newBill);
@@ -640,21 +700,55 @@ router.patch('/:id', validateObjectId(), async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
-    const db = getDatabase();
-    const result = await db.collection('bills').updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { status, updated_at: new Date() } }
-    );
+    console.log(`⚙️ Attempting to update status for bill ${id} to "${status}"`);
     
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: 'Bill not found' });
+    if (!status) {
+      console.error('Status field is missing in request body');
+      return res.status(400).json({ error: 'Status field is required' });
     }
     
-    const updatedBill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
-    res.json(updatedBill);
+    if (!ObjectId.isValid(id)) {
+      console.error(`Invalid ObjectId format: ${id}`);
+      return res.status(400).json({ error: 'Invalid bill ID format' });
+    }
+    
+    const db = getDatabase();
+    if (!db) {
+      console.error('Cannot update bill: No database connection');
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+    
+    try {
+      console.log(`Executing status update for bill ${id}...`);
+      const result = await db.collection('bills').updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status, updated_at: new Date() } }
+      );
+      
+      console.log(`Update result:`, result);
+      
+      if (result.matchedCount === 0) {
+        console.log(`No bill found with ID ${id}`);
+        return res.status(404).json({ error: 'Bill not found' });
+      }
+      
+      // Fetch the updated bill to return
+      const updatedBill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
+      console.log(`Successfully updated bill ${id} status to "${status}"`);
+      return res.json(updatedBill);
+    } catch (dbError) {
+      console.error(`Database error while updating bill ${id}:`, dbError);
+      return res.status(500).json({ 
+        error: 'Database operation failed',
+        details: dbError.message
+      });
+    }
   } catch (error) {
-    console.error('Error updating bill:', error);
-    res.status(500).json({ error: 'Failed to update bill' });
+    console.error('Error in update bill status route:', error);
+    return res.status(500).json({ 
+      error: 'Failed to update bill status',
+      details: error.message
+    });
   }
 });
 
@@ -662,18 +756,47 @@ router.patch('/:id', validateObjectId(), async (req, res) => {
 router.delete('/:id', validateObjectId(), async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`🗑️ Attempting to delete bill with ID: ${id}`);
     
-    const db = getDatabase();
-    const result = await db.collection('bills').deleteOne({ _id: new ObjectId(id) });
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Bill not found' });
+    if (!ObjectId.isValid(id)) {
+      console.error(`Invalid ObjectId format: ${id}`);
+      return res.status(400).json({ error: 'Invalid bill ID format' });
     }
     
-    res.status(204).send();
+    const db = getDatabase();
+    if (!db) {
+      console.error('Cannot delete bill: No database connection');
+      return res.status(503).json({ error: 'Database connection not available' });
+    }
+    
+    try {
+      console.log(`Executing deletion for bill ${id}...`);
+      const result = await db.collection('bills').deleteOne({ 
+        _id: new ObjectId(id) 
+      });
+      
+      console.log(`Deletion result:`, result);
+      
+      if (result.deletedCount === 0) {
+        console.log(`No bill found with ID ${id}`);
+        return res.status(404).json({ error: 'Bill not found' });
+      }
+      
+      console.log(`Successfully deleted bill ${id}`);
+      return res.status(204).send();
+    } catch (dbError) {
+      console.error(`Database error while deleting bill ${id}:`, dbError);
+      return res.status(500).json({ 
+        error: 'Database operation failed',
+        details: dbError.message
+      });
+    }
   } catch (error) {
-    console.error('Error deleting bill:', error);
-    res.status(500).json({ error: 'Failed to delete bill' });
+    console.error('Error in delete bill route:', error);
+    return res.status(500).json({ 
+      error: 'Failed to delete bill',
+      details: error.message
+    });
   }
 });
 
