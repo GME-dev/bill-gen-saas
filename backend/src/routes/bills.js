@@ -1,6 +1,5 @@
 import express from 'express'
 import { getDatabase, initializeDatabase } from '../utils/database.js'
-import { generateBill } from '../utils/billGenerator.js'
 import { PDFGenerator } from '../utils/pdfGenerator.js'
 
 const router = express.Router()
