@@ -133,40 +133,14 @@ export class PDFGenerator {
             // Company information (left side)
             const companyY = startY - 60;
             
-            // Try to add company logo
-            try {
-                const logoImageBytes = await fs.promises.readFile(this.logoPath);
-                const logoImage = await pdfDoc.embedPng(logoImageBytes);
-                const logoDims = logoImage.scale(0.5); // Scale as needed
-                
-                // Position logo on the left
-                page.drawImage(logoImage, {
-                    x: this.margin,
-                    y: companyY - 40,
-                    width: 50,
-                    height: 50,
-                });
-                
-                // Company details next to logo
-                page.drawText(COMPANY_INFO.name, {
-                    x: this.margin + 60,
-                    y: companyY,
-                    size: 14,
-                    font: boldFont,
-                    color: COLOR_BLACK
-                });
-                
-            } catch (error) {
-                console.error('Error embedding logo:', error);
-                // Fallback - just draw company name if logo fails
-                page.drawText(COMPANY_INFO.name, {
-                    x: this.margin,
-                    y: companyY,
-                    size: 14,
-                    font: boldFont,
-                    color: COLOR_BLACK
-                });
-            }
+            // Draw company name - no logo attempt for now
+            page.drawText(COMPANY_INFO.name, {
+                x: this.margin,
+                y: companyY,
+                size: 14,
+                font: boldFont,
+                color: COLOR_BLACK
+            });
             
             // Company address and dealer info
             page.drawText(COMPANY_INFO.address, {
@@ -371,7 +345,7 @@ export class PDFGenerator {
 
     drawSignatures(page, width, startY, bill, regularFont, boldFont) {
         // Fixed position from bottom of page
-        const signatureY = startY;
+        const signatureY = 120; // Fixed position from bottom
         
         // Left signature (Dealer)
         page.drawLine({
