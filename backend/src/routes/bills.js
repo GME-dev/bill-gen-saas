@@ -201,7 +201,8 @@ router.post('/', async (req, res) => {
       model_name,
       motor_number,
       chassis_number,
-      bike_price
+      bike_price,
+      estimated_delivery_date
     } = req.body;
     
     if (!bill_type || !customer_name || !customer_nic || !customer_address || 
