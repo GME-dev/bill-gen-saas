@@ -1,6 +1,6 @@
 import express from 'express'
 import { getDatabase, initializeDatabase } from '../utils/database.js'
-import { PDFGenerator } from '../utils/pdfGenerator.js'
+import { PDFGenerator } from '../../backend/src/utils/pdfGenerator.js'
 import { ObjectId } from 'mongodb'
 
 const router = express.Router()
