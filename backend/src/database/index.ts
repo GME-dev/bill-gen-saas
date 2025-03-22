@@ -1,60 +1,89 @@
-import sqlite3 from 'sqlite3';
+import { MongoClient, Db } from 'mongodb';
+import dotenv from 'dotenv';
 import { logger } from '../utils/logger';
 
-const db = new sqlite3.Database('./bills.db');
+// Load environment variables
+dotenv.config();
 
-export const setupDatabase = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    db.serialize(() => {
-      // Create bills table
-      db.run(`
-        CREATE TABLE IF NOT EXISTS bills (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          customer_name TEXT NOT NULL,
-          customer_nic TEXT NOT NULL,
-          customer_address TEXT NOT NULL,
-          total_amount REAL NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+// Connection variables
+let client: MongoClient | null = null;
+let db: Db | null = null;
+let connectionAttempts = 0;
+const MAX_CONNECTION_ATTEMPTS = 5;
 
-      // Create bill_items table
-      db.run(`
-        CREATE TABLE IF NOT EXISTS bill_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          bill_id INTEGER NOT NULL,
-          product_name TEXT NOT NULL,
-          quantity INTEGER NOT NULL,
-          unit_price REAL NOT NULL,
-          total_price REAL NOT NULL,
-          FOREIGN KEY (bill_id) REFERENCES bills (id)
-        )
-      `);
+export const setupDatabase = async (): Promise<Db | null> => {
+  if (db) {
+    logger.info('Database already initialized');
+    return db;
+  }
 
-      // Create products table
-      db.run(`
-        CREATE TABLE IF NOT EXISTS products (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL UNIQUE,
-          model TEXT,
-          unit_price REAL NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-    });
-
-    db.get('SELECT 1', (err) => {
-      if (err) {
-        logger.error('Database setup failed:', err);
-        reject(err);
-      } else {
-        logger.info('Database setup completed successfully');
-        resolve();
+  while (connectionAttempts < MAX_CONNECTION_ATTEMPTS) {
+    try {
+      connectionAttempts++;
+      logger.info(`Initializing database... (Attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
+      
+      // Check for MongoDB URI
+      const mongoUri = process.env.MONGODB_URI;
+      if (!mongoUri) {
+        throw new Error('MONGODB_URI environment variable is not set');
       }
-    });
-  });
+      
+      // Get database name from environment or use default
+      const dbName = process.env.MONGODB_DB_NAME || 'bill-gen';
+      
+      // Connect to MongoDB
+      logger.info(`Connecting to MongoDB database: ${dbName}`);
+      client = new MongoClient(mongoUri);
+      await client.connect();
+      
+      // Access the database
+      db = client.db(dbName);
+      
+      // Test connection
+      const result = await db.command({ ping: 1 });
+      logger.info('MongoDB connection successful:', result);
+      
+      // Reset connection attempts on success
+      connectionAttempts = 0;
+      
+      logger.info('MongoDB initialization complete');
+      return db;
+    } catch (error) {
+      logger.error('Error initializing database:', error);
+      
+      if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+        logger.error(`Failed to connect to database after ${MAX_CONNECTION_ATTEMPTS} attempts`);
+        throw error;
+      }
+      
+      logger.info(`Will retry database connection on next request (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})`);
+      // If we fail, we'll retry on the next request
+      db = null;
+      if (client) {
+        try {
+          await client.close();
+        } catch (closeError) {
+          logger.error('Error closing client:', closeError);
+        }
+        client = null;
+      }
+    }
+  }
+  
+  return null;
 };
 
-export default db; 
+export function getDatabase(): Db | null {
+  return db;
+}
+
+export async function closeDatabase(): Promise<void> {
+  if (client) {
+    logger.info('Closing database connection...');
+    await client.close();
+    client = null;
+    db = null;
+    connectionAttempts = 0;
+    logger.info('Database connection closed');
+  }
+} 

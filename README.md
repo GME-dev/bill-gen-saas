@@ -38,9 +38,9 @@ A comprehensive bill generation system for motorcycle sales, supporting both cas
 ## Tech Stack
 
 - Frontend: React with Ant Design
-- Backend: Supabase
-- Database: PostgreSQL
-- Authentication: Supabase Auth
+- Backend: Express.js
+- Database: MongoDB Atlas
+- Deployment: Cloudflare Pages (Frontend) and Railway (Backend)
 
 ## Setup
 
@@ -52,42 +52,64 @@ A comprehensive bill generation system for motorcycle sales, supporting both cas
 
 2. Install dependencies:
    ```bash
+   # Install frontend dependencies
+   cd frontend
+   npm install
+   
+   # Install backend dependencies
+   cd ../backend
    npm install
    ```
 
-3. Create a `.env` file:
-   ```env
-   REACT_APP_SUPABASE_URL=your_supabase_url
-   REACT_APP_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
+3. Create environment files:
+   - Frontend `.env`:
+     ```env
+     VITE_API_URL=your_backend_api_url
+     ```
+   - Backend `.env`:
+     ```env
+     MONGODB_URI=your_mongodb_atlas_connection_string
+     MONGODB_DB_NAME=bill-gen
+     CORS_ORIGIN=your_frontend_url
+     ```
 
 4. Set up the database:
-   - Run the migrations in `supabase_migration.sql`
-   - This will create all necessary tables and insert default bike models
+   - Run the migration script to initialize MongoDB collections:
+     ```bash
+     cd backend
+     node scripts/migrate-to-mongodb.js
+     ```
 
-5. Start the development server:
+5. Start development servers:
    ```bash
-   npm start
+   # Start backend
+   cd backend
+   npm run dev
+   
+   # Start frontend (in a separate terminal)
+   cd frontend
+   npm run dev
    ```
 
 ## Database Schema
 
-### bike_models
-- `id`: UUID (Primary Key)
-- `model_name`: Text (Unique)
-- `price`: Decimal
-- `motor_number_prefix`: Text
-- `chassis_number_prefix`: Text
+### bike_models (MongoDB Collection)
+- `_id`: ObjectId (Primary Key)
+- `name`: String (Unique)
+- `price`: Number
 - `is_ebicycle`: Boolean
+- `can_be_leased`: Boolean
+- `created_at`: Date
+- `updated_at`: Date
 
-### bills
-- `id`: UUID (Primary Key)
-- `bill_number`: Text (Unique)
-- `bill_type`: Text ('cash' or 'leasing')
-- `customer_name`: Text
-- `customer_nic`: Text
-- `customer_address`: Text
-- `model_name`: Text (References bike_models)
+### bills (MongoDB Collection)
+- `_id`: ObjectId (Primary Key)
+- `bill_number`: String (Unique)
+- `bill_type`: String ('cash' or 'leasing')
+- `customer_name`: String
+- `customer_nic`: String
+- `customer_address`: String
+- `model_name`: String (References bike_models.name)
 - Various amount fields and status tracking
 
 ## Contributing
