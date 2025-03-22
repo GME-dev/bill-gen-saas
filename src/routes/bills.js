@@ -1,6 +1,5 @@
 import express from 'express'
-import { getDatabase } from '../utils/database.js'
-import { generateBill } from '../utils/billGenerator.js'
+import { getDatabase, initializeDatabase } from '../utils/database.js'
 import { PDFGenerator } from '../utils/pdfGenerator.js'
 import { ObjectId } from 'mongodb'
 
@@ -164,35 +163,23 @@ router.post('/', async (req, res) => {
 // Generate bill document (DOCX)
 router.get('/:id/generate', async (req, res) => {
   try {
-    const { id } = req.params
     const db = getDatabase()
-    if (!db) {
-      return res.status(503).json({ error: 'Database connection not available' })
-    }
-    
-    // Validate that the ID is a valid MongoDB ObjectId
-    if (!ObjectId.isValid(id)) {
-      console.log(`Invalid ObjectId format: ${id}`)
-      return res.status(400).json({ error: 'Invalid bill ID format' })
-    }
-    
-    const collection = db.collection('bills')
-    const bill = await collection.findOne({ _id: new ObjectId(id) })
-    
+    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
     
-    const itemsCollection = db.collection('bill_items')
-    const items = await itemsCollection.find({ bill_id: id }).toArray()
+    const items = await db.all('SELECT * FROM bill_items WHERE bill_id = ?', [req.params.id])
     bill.items = items
     
-    const docxBuffer = await generateBill(bill)
+    // Use the PDFGenerator to generate the document
+    const docxBuffer = await pdfGenerator.generateBill(bill, 'docx')
     
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill._id}.docx`)
+    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill.id}.docx`)
     res.send(docxBuffer)
   } catch (error) {
+    console.error('Error generating DOCX:', error);
     res.status(500).json({ error: error.message })
   }
 })
