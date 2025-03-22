@@ -1,17 +1,17 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
-dockerfileDirectory = "."
+dockerfile = "Dockerfile"
 buildCommand = ""
 
 [deploy]
-startCommand = "./start.sh"
+startCommand = ""
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 healthcheckPath = "/health"
-healthcheckTimeout = 100
+healthcheckTimeout = 10
 
 [variables]
 NODE_ENV = "production"
+PORT = "8080"
 CORS_ORIGIN = "https://tmr-bill-generator.pages.dev"
 USE_MOCK_DB = "false" 

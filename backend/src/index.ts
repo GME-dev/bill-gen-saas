@@ -1,51 +1,95 @@
 import express from 'express';
 import cors from 'cors';
-// Use type assertion to work around missing declaration files
-import { initializeDatabase } from './utils/database.js';
-import billsRouter from './routes/bills.js';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+import { connectToDatabase, closeDatabaseConnection } from './database/index.js';
 import bikeModelsRouter from './routes/bike-models.js';
+import billsRouter from './routes/bills.js';
 import healthRouter from './routes/health.js';
 
+// Load environment variables
+dotenv.config();
+
+// Initialize Express app
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
-// Middleware
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type']
-}));
-
+// Apply middleware
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan('dev'));
 
-// Initialize database connection
-initializeDatabase()
+// Connect to database
+connectToDatabase()
   .then(() => {
-    console.log('Database connection initialized');
+    console.log('Successfully connected to MongoDB database');
   })
-  .catch((error: unknown) => {
-    console.error('Failed to initialize database:', error);
-    process.exit(1);
+  .catch(err => {
+    console.error('Failed to connect to MongoDB:', err);
+    // Continue anyway - health check will report DB issues
   });
 
-// Routes
-app.use('/api/bills', billsRouter);
+// Register routes
 app.use('/api/bike-models', bikeModelsRouter);
+app.use('/api/bills', billsRouter);
 app.use('/health', healthRouter);
 
-// Define a type for Router with handle method
-type RouterWithHandle = express.Router & { handle: (req: express.Request, res: express.Response) => void };
-
-// Add direct PDF routes
-app.get('/api/bills/:id/pdf', (req, res) => {
-  (billsRouter as RouterWithHandle).handle(req, res);
+// Root route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    service: 'TMR Bill Generator API',
+    version: '1.0.0',
+    endpoints: [
+      { path: '/health', method: 'GET', description: 'Service health information' },
+      { path: '/api/bike-models', method: 'GET', description: 'Get all bike models' },
+      { path: '/api/bills', method: 'GET', description: 'Get all bills' }
+    ]
+  });
 });
 
-app.get('/api/bills/preview/pdf', (req, res) => {
-  (billsRouter as RouterWithHandle).handle(req, res);
+// Error handling middleware
+app.use((req, res, next) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Start server
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
-}); 
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message || 'Something went wrong',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start the server
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`API documentation: http://localhost:${PORT}/`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(async () => {
+    console.log('HTTP server closed');
+    await closeDatabaseConnection();
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(async () => {
+    console.log('HTTP server closed');
+    await closeDatabaseConnection();
+    process.exit(0);
+  });
+});
+
+export default app; 
