@@ -63,7 +63,7 @@ class ApiClient {
           baseURL: this.baseURL,
           timeout: 240000, // 4 minutes timeout for PDFs
           responseType: 'blob',
-          headers: {
+  headers: {
             'Accept': 'application/pdf'
           }
         });
