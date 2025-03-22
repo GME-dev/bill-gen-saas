@@ -1,6 +1,6 @@
 // Simplified fallback JavaScript version
-const express = require('express')
-const cors = require('cors')
+import express from 'express'
+import cors from 'cors'
 
 console.log("Using JavaScript fallback version of index.js")
 

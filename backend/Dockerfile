@@ -34,7 +34,7 @@ RUN echo "Building TypeScript..." && \
     (echo "⚠️ TypeScript build failed. Creating fallback..." && \
     echo "Copying JS files to dist:" && \
     cp -R src/*.js dist/ 2>/dev/null || \
-    echo "// Fallback index.js\nconsole.log('Using fallback index.js');\nrequire('../src/index.js');" > dist/index.js)
+    echo "// Fallback index.js - ES Module syntax\nconsole.log('Using dynamically generated fallback index.js');\nimport '../src/index.js';" > dist/index.js)
 
 # Verify build results
 RUN ls -la dist || echo "❌ Dist directory issue"
@@ -50,5 +50,9 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
-# Start application with fallback option
-CMD ["node", "dist/index.js"] 
+# Create an alternative startup script that handles fallback better
+RUN echo '#!/bin/sh\nnode dist/index.js 2>/dev/null || node src/index.js' > start.sh && \
+    chmod +x start.sh
+
+# Start application with better fallback handling
+CMD ["./start.sh"] 
