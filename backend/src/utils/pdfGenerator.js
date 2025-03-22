@@ -10,6 +10,12 @@ import { getDatabase } from './database.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
+// Predefined colors
+const COLOR_BLACK = rgb(0, 0, 0);
+const COLOR_WHITE = rgb(1, 1, 1);
+const COLOR_GRAY_LIGHT = rgb(0.95, 0.95, 0.95);
+const COLOR_GRAY = rgb(0.8, 0.8, 0.8);
+
 export class PDFGenerator {
     constructor() {
         this.fontManager = fontManager
@@ -18,141 +24,59 @@ export class PDFGenerator {
         this.margin = 50;
         this.logoPath = path.join(__dirname, '../assets/logo.png')
         
-        // Better spacing configuration
+        // Spacing configuration
         this.spacing = {
-            lineHeight: 20,        // Standard line height
-            sectionGap: 40,        // Gap between major sections
-            rowGap: 5,             // Gap between table rows
-            paragraphGap: 15,      // Gap between paragraphs
-            signatureSpace: 80     // Space for signatures
-        }
-    }
-
-    drawTableRow(page, x, y, columns, font, fontSize = 12, bold = false) {
-        const colWidths = [200, 200];  // Adjust column widths as needed
-        const padding = 10;
-        const rowHeight = 25;
-
-        // Draw cell borders and background
-        page.drawRectangle({
-            x,
-            y: y - rowHeight,
-            width: colWidths[0] + colWidths[1],
-            height: rowHeight,
-            borderWidth: 1,
-            borderColor: rgb(0, 0, 0),  // Changed to black for more visible borders
-            color: rgb(1, 1, 1),
-        });
-
-        // Draw vertical line between columns
-        page.drawLine({
-            start: { x: x + colWidths[0], y },
-            end: { x: x + colWidths[0], y: y - rowHeight },
-            thickness: 1,
-            color: rgb(0, 0, 0),  // Changed to black
-        });
-
-        // Draw text in cells with proper vertical alignment
-        columns.forEach((text, index) => {
-            const textWidth = font.widthOfTextAtSize(text, fontSize);
-            const textX = x + (index === 0 ? padding : colWidths[0] + padding);
-            
-            // Position text with proper vertical center alignment
-            const textY = y - rowHeight + (rowHeight - fontSize) / 2;
-            
-            page.drawText(text || '', {
-                x: textX,
-                y: textY,
-                size: fontSize,
-                font,
-            });
-        });
-
-        return y - rowHeight;
-    }
-
-    async getModelIsEbicycle(modelName) {
-        try {
-            // 🔥🔥🔥 NUCLEAR OVERRIDE - ANY MODEL NAME CONTAINING COLA5 IS ALWAYS E-BICYCLE 🔥🔥🔥
-            // This is the absolute highest priority override
-            const modelString = String(modelName || '');
-            if (
-                modelString.toLowerCase().includes('cola5') || 
-                modelString.toUpperCase().includes('COLA5') ||
-                modelString.includes('COLA5') || 
-                modelString.includes('cola5')
-            ) {
-                console.log(`[🔥 NUCLEAR OVERRIDE 🔥] Model ${modelName} contains 'COLA5' - FORCING e-bicycle=true`);
-                console.log(`[🔥 NUCLEAR OVERRIDE 🔥] This will ALWAYS prevent RMV charges for this bill!`);
-                return true;
-            }
-            
-            // EMERGENCY OVERRIDE FOR COLA5
-            const upperModelName = (modelName || '').toString().trim().toUpperCase();
-            if (upperModelName.includes('COLA5') || upperModelName.includes('X01')) {
-                console.log(`[EMERGENCY OVERRIDE] Forcing model ${modelName} to be an e-bicycle`);
-                return true;
-            }
-            
-            // Try to get the is_ebicycle flag from the database
-            const db = getDatabase();
-            const result = await db.query(
-                'SELECT is_ebicycle FROM bike_models WHERE model_name = $1',
-                [modelName]
-            );
-            
-            if (result.rows.length > 0) {
-                console.log(`[DB INFO] Model ${modelName} found in database: is_ebicycle = ${result.rows[0].is_ebicycle}`);
-                return result.rows[0].is_ebicycle;
-            }
-            
-            // If not found, try a LIKE query
-            const likeResult = await db.query(
-                "SELECT is_ebicycle FROM bike_models WHERE model_name ILIKE $1",
-                [`%${modelName}%`]
-            );
-            
-            if (likeResult.rows.length > 0) {
-                console.log(`[DB INFO] Model similar to ${modelName} found in database: is_ebicycle = ${likeResult.rows[0].is_ebicycle}`);
-                return likeResult.rows[0].is_ebicycle;
-            }
-            
-            console.log(`[DB WARNING] Model ${modelName} not found in database, falling back to string matching`);
-            return null;
-        } catch (error) {
-            console.error(`[DB ERROR] Error getting is_ebicycle for model ${modelName}:`, error);
-            return null;
+            lineHeight: 20,
+            sectionGap: 40,
+            rowGap: 5,
+            tableRowHeight: 25,
+            paragraphGap: 15,
+            signatureSpace: 100
         }
     }
 
     async generateBill(bill) {
         try {
-            // Validate and normalize bill data
+            // Normalize and validate bill data
             const normalizedBill = this.normalizeBillData(bill);
             
-            // Generate PDF document
+            // Create PDF document
             const pdfDoc = await PDFDocument.create();
+            
+            // Set document metadata
+            pdfDoc.setTitle(`Invoice - ${normalizedBill.bill_number}`);
+            pdfDoc.setAuthor(COMPANY_INFO.name);
+            pdfDoc.setSubject(`Bill #${normalizedBill.bill_number}`);
+            pdfDoc.setKeywords(['invoice', 'bill', 'motorcycle', 'TMR']);
+            
+            // Add page
             const page = pdfDoc.addPage([this.pageWidth, this.pageHeight]);
             const { width, height } = page.getSize();
             
             // Embed fonts
-            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
             const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+            // Draw content sections
+            let yPosition = height - this.margin;
             
-            // Draw header section
-            this.drawHeader(page, width, height, normalizedBill, font, boldFont);
+            // Header with logo and title
+            yPosition = await this.drawHeader(pdfDoc, page, width, yPosition, normalizedBill, regularFont, boldFont);
             
-            // Draw customer information
-            let currentY = this.drawCustomerInfo(page, width, height - 150, normalizedBill, font, boldFont);
+            // Customer information section
+            yPosition = this.drawCustomerInformation(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
             
-            // Draw vehicle information
-            currentY = this.drawVehicleInfo(page, width, currentY - 40, normalizedBill, font, boldFont);
+            // Vehicle information section
+            yPosition = this.drawVehicleInformation(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
             
-            // Draw price details
-            currentY = this.drawPriceDetails(page, width, currentY - 40, normalizedBill, font, boldFont);
+            // Price details
+            yPosition = this.drawPriceDetails(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
             
-            // Draw terms and signature - pass the currentY so it knows where to start
-            this.drawTermsAndSignature(page, width, currentY - 40, normalizedBill, font, boldFont);
+            // Terms and conditions
+            yPosition = this.drawTermsAndConditions(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
+            
+            // Signatures section
+            this.drawSignatures(page, width, this.margin + this.spacing.signatureSpace, normalizedBill, regularFont, boldFont);
             
             return await pdfDoc.save();
         } catch (error) {
@@ -162,10 +86,10 @@ export class PDFGenerator {
     }
 
     normalizeBillData(bill) {
-        // Ensure all required fields have default values
+        // Default values for all required fields
         return {
             ...bill,
-            bill_number: bill.bill_number || bill.id || 'PREVIEW',
+            bill_number: bill.bill_number || bill._id || bill.id || 'PREVIEW',
             bill_date: bill.bill_date || new Date(),
             customer_name: bill.customer_name || 'N/A',
             customer_nic: bill.customer_nic || 'N/A',
@@ -182,256 +106,357 @@ export class PDFGenerator {
         };
     }
 
-    drawHeader(page, width, height, bill, font, boldFont) {
-        // Center "INVOICE" text
-        const invoiceText = 'INVOICE';
-        const invoiceWidth = boldFont.widthOfTextAtSize(invoiceText, 16);
-        page.drawText(invoiceText, {
-            x: (width - invoiceWidth) / 2,
-            y: height - this.margin,
-            size: 16,
-            font: boldFont,
-        });
-
-        // Bill type under INVOICE
-        const billTypeText = this.getBillTypeText(bill.bill_type);
-        const billTypeWidth = boldFont.widthOfTextAtSize(billTypeText, 14);
-        page.drawText(billTypeText, {
-            x: (width - billTypeWidth) / 2,
-            y: height - this.margin - 25,
-            size: 14,
-            font: boldFont,
-        });
-
-        // Company details (left side)
-        const companyY = height - this.margin - 60;
-        page.drawText(COMPANY_INFO.name, {
-            x: this.margin,
-            y: companyY,
-            size: 14,
-            font: boldFont,
-        });
-
-        page.drawText(COMPANY_INFO.address, {
-            x: this.margin,
-            y: companyY - 20,
-            size: 12,
-            font: font,
-        });
-
-        page.drawText(COMPANY_INFO.dealer, {
-            x: this.margin,
-            y: companyY - 35,
-            size: 12,
-            font: font,
-        });
-
-        // Bill details (right side)
-        const billNoText = `Bill No: ${bill.bill_number}`;
-        const dateText = `Date: ${this.formatDate(bill.bill_date)}`;
-        
-        const billNoWidth = font.widthOfTextAtSize(billNoText, 12);
-        const dateWidth = font.widthOfTextAtSize(dateText, 12);
-        
-        page.drawText(billNoText, {
-            x: width - this.margin - billNoWidth,
-            y: companyY,
-            size: 12,
-            font: font,
-        });
-
-        page.drawText(dateText, {
-            x: width - this.margin - dateWidth,
-            y: companyY - 20,
-            size: 12,
-            font: font,
-        });
+    async drawHeader(pdfDoc, page, width, startY, bill, regularFont, boldFont) {
+        try {
+            // Center "INVOICE" title
+            const titleText = 'INVOICE';
+            const titleWidth = boldFont.widthOfTextAtSize(titleText, 18);
+            page.drawText(titleText, {
+                x: (width - titleWidth) / 2,
+                y: startY,
+                size: 18,
+                font: boldFont,
+                color: COLOR_BLACK
+            });
+            
+            // Bill type (CASH/LEASING/ADVANCE)
+            const billTypeText = this.getBillTypeText(bill.bill_type);
+            const billTypeWidth = boldFont.widthOfTextAtSize(billTypeText, 14);
+            page.drawText(billTypeText, {
+                x: (width - billTypeWidth) / 2,
+                y: startY - 25,
+                size: 14,
+                font: boldFont,
+                color: COLOR_BLACK
+            });
+            
+            // Company information (left side)
+            const companyY = startY - 60;
+            
+            // Try to add company logo
+            try {
+                const logoImageBytes = await fs.promises.readFile(this.logoPath);
+                const logoImage = await pdfDoc.embedPng(logoImageBytes);
+                const logoDims = logoImage.scale(0.5); // Scale as needed
+                
+                // Position logo on the left
+                page.drawImage(logoImage, {
+                    x: this.margin,
+                    y: companyY - 40,
+                    width: 50,
+                    height: 50,
+                });
+                
+                // Company details next to logo
+                page.drawText(COMPANY_INFO.name, {
+                    x: this.margin + 60,
+                    y: companyY,
+                    size: 14,
+                    font: boldFont,
+                    color: COLOR_BLACK
+                });
+                
+            } catch (error) {
+                console.error('Error embedding logo:', error);
+                // Fallback - just draw company name if logo fails
+                page.drawText(COMPANY_INFO.name, {
+                    x: this.margin,
+                    y: companyY,
+                    size: 14,
+                    font: boldFont,
+                    color: COLOR_BLACK
+                });
+            }
+            
+            // Company address and dealer info
+            page.drawText(COMPANY_INFO.address, {
+                x: this.margin,
+                y: companyY - 20,
+                size: 12,
+                font: regularFont,
+                color: COLOR_BLACK
+            });
+            
+            page.drawText(COMPANY_INFO.dealer, {
+                x: this.margin,
+                y: companyY - 40,
+                size: 12,
+                font: regularFont,
+                color: COLOR_BLACK
+            });
+            
+            // Bill details (right side)
+            const billNoText = `Bill No: ${bill.bill_number}`;
+            const dateText = `Date: ${this.formatDate(bill.bill_date)}`;
+            
+            const billNoWidth = regularFont.widthOfTextAtSize(billNoText, 12);
+            const dateWidth = regularFont.widthOfTextAtSize(dateText, 12);
+            
+            page.drawText(billNoText, {
+                x: width - this.margin - billNoWidth,
+                y: companyY,
+                size: 12,
+                font: regularFont,
+                color: COLOR_BLACK
+            });
+            
+            page.drawText(dateText, {
+                x: width - this.margin - dateWidth,
+                y: companyY - 20,
+                size: 12,
+                font: regularFont,
+                color: COLOR_BLACK
+            });
+            
+            return companyY - 60; // Return position for next section
+        } catch (error) {
+            console.error('Error drawing header:', error);
+            return startY - 120; // Fallback position
+        }
     }
 
-    drawCustomerInfo(page, width, startY, bill, font, boldFont) {
+    drawCustomerInformation(page, width, startY, bill, regularFont, boldFont) {
         // Section title
         page.drawText('Customer Information', {
             x: this.margin,
             y: startY,
             size: 14,
             font: boldFont,
+            color: COLOR_BLACK
         });
-
-        // Customer details table
-        let currentY = startY - 30;
-        const customerDetails = [
-            ['Name', bill.customer_name],
-            ['NIC', bill.customer_nic],
-            ['Address', bill.customer_address]
+        
+        // Create customer info table
+        const tableData = [
+            {label: 'Name', value: bill.customer_name},
+            {label: 'NIC', value: bill.customer_nic},
+            {label: 'Address', value: bill.customer_address}
         ];
-
-        customerDetails.forEach(([label, value]) => {
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY, [label, value], font);
+        
+        let currentY = startY - 30;
+        
+        // Draw table rows
+        tableData.forEach(({label, value}) => {
+            currentY = this.drawTableRow(page, this.margin, currentY, [label, value], regularFont);
         });
-
+        
         return currentY;
     }
 
-    drawVehicleInfo(page, width, startY, bill, font, boldFont) {
+    drawVehicleInformation(page, width, startY, bill, regularFont, boldFont) {
         // Section title
         page.drawText('Vehicle Information', {
             x: this.margin,
             y: startY,
             size: 14,
             font: boldFont,
+            color: COLOR_BLACK
         });
-
-        // Vehicle details table
-        let currentY = startY - 30;
-        const vehicleDetails = [
-            ['Model', bill.model_name],
-            ['Type', bill.is_ebicycle ? 'E-bicycle' : 'E-bike'],
-            ['Motor Number', bill.motor_number],
-            ['Chassis Number', bill.chassis_number]
+        
+        // Create vehicle info table
+        const tableData = [
+            {label: 'Model', value: bill.model_name},
+            {label: 'Type', value: bill.is_ebicycle ? 'E-bicycle' : 'E-bike'},
+            {label: 'Motor Number', value: bill.motor_number},
+            {label: 'Chassis Number', value: bill.chassis_number}
         ];
-
-        vehicleDetails.forEach(([label, value]) => {
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY, [label, value], font);
+        
+        let currentY = startY - 30;
+        
+        // Draw table rows
+        tableData.forEach(({label, value}) => {
+            currentY = this.drawTableRow(page, this.margin, currentY, [label, value], regularFont);
         });
-
+        
         return currentY;
     }
 
-    drawPriceDetails(page, width, startY, bill, font, boldFont) {
+    drawPriceDetails(page, width, startY, bill, regularFont, boldFont) {
         // Section title
         page.drawText('Price Details:', {
             x: this.margin,
             y: startY,
             size: 14,
             font: boldFont,
+            color: COLOR_BLACK
         });
-
-        // Calculate amounts
+        
+        // Draw payment details table
+        let currentY = startY - 30;
+        
+        // Draw price rows based on bill type and vehicle type
         const bikePrice = bill.bike_price;
         const rmvCharge = bill.is_ebicycle ? 0 : 13000;
         const totalAmount = bikePrice + rmvCharge;
-
-        // Price details table
-        let currentY = startY - 30;
         
         // Bike price row
-        currentY = this.drawTableBorderedRow(page, this.margin, currentY,
-            ['Bike Price', this.formatAmount(bikePrice)], font);
-
+        currentY = this.drawTableRow(page, this.margin, currentY, 
+            ['Bike Price', this.formatAmount(bikePrice)], regularFont);
+        
         // RMV charge row (if applicable)
         if (!bill.is_ebicycle) {
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
-                ['RMV Charge', this.formatAmount(rmvCharge)], font);
+            currentY = this.drawTableRow(page, this.margin, currentY, 
+                ['RMV Charge', this.formatAmount(rmvCharge)], regularFont);
         }
-
-        // For leasing bills
+        
+        // Additional rows based on bill type
         if (bill.bill_type === 'LEASING') {
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
-                ['Down Payment', this.formatAmount(bill.down_payment)], font);
-            
-            // Total is down payment for leasing
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
+            currentY = this.drawTableRow(page, this.margin, currentY,
+                ['Down Payment', this.formatAmount(bill.down_payment)], regularFont);
+                
+            // Total row for leasing (down payment)
+            currentY = this.drawTableRow(page, this.margin, currentY,
                 ['Total Amount', `${this.formatAmount(bill.down_payment)} (D/P)`], boldFont, true);
         }
-        // For advance payment bills
         else if (bill.bill_type === 'ADVANCE') {
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
-                ['Advance Amount', this.formatAmount(bill.advance_amount)], font);
-            
+            currentY = this.drawTableRow(page, this.margin, currentY,
+                ['Advance Amount', this.formatAmount(bill.advance_amount)], regularFont);
+                
             const balance = totalAmount - bill.advance_amount;
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
-                ['Balance Amount', this.formatAmount(balance)], font);
-            
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
+            currentY = this.drawTableRow(page, this.margin, currentY,
+                ['Balance Amount', this.formatAmount(balance)], regularFont);
+                
+            // Total row for advance payment
+            currentY = this.drawTableRow(page, this.margin, currentY,
                 ['Total Amount', this.formatAmount(totalAmount)], boldFont, true);
         }
-        // For cash bills
         else {
-            currentY = this.drawTableBorderedRow(page, this.margin, currentY,
+            // Total row for cash bill
+            currentY = this.drawTableRow(page, this.margin, currentY,
                 ['Total Amount', this.formatAmount(totalAmount)], boldFont, true);
         }
-
+        
         return currentY;
     }
 
-    drawTermsAndSignature(page, width, startY, bill, font, boldFont) {
-        const { height } = page.getSize();
-        
-        // Add proper spacing between sections
-        startY = startY - 40;
-        
-        // Terms and conditions
+    drawTermsAndConditions(page, width, startY, bill, regularFont, boldFont) {
+        // Section title
         page.drawText('Terms and Conditions:', {
             x: this.margin,
             y: startY,
             size: 12,
             font: boldFont,
+            color: COLOR_BLACK
         });
-
+        
+        // Terms as bullet points
         const terms = [
             '1. All prices are in Sri Lankan Rupees.',
             '2. Chassis Number is valid for 30 days from the issue date.',
             '3. This is a computer-generated document and does not require a signature.',
             '4. Please retain this invoice for future reference.'
         ];
-
+        
+        // Add bill-specific terms
         if (bill.bill_type === 'LEASING') {
             terms.push('5. Balance amount will be settled by the leasing company.');
         } else if (bill.bill_type === 'ADVANCE' && bill.estimated_delivery_date) {
             terms.push(`5. Estimated delivery date: ${this.formatDate(bill.estimated_delivery_date)}`);
         }
-
-        terms.forEach((term, index) => {
+        
+        // Draw each term with proper spacing
+        let currentY = startY - 20;
+        terms.forEach(term => {
             page.drawText(term, {
                 x: this.margin,
-                y: startY - ((index + 1) * 20),
+                y: currentY,
                 size: 10,
-                font: font,
+                font: regularFont,
+                color: COLOR_BLACK
             });
-        });
-
-        // FIXED SIGNATURE POSITION: Always 100 units from bottom of page
-        const signatureY = 100;
-        
-        // Draw signature labels FIRST
-        page.drawText('Authorized Signature', {
-            x: this.margin + 10,
-            y: signatureY - 15,
-            size: 10,
-            font: font,
-        });
-
-        page.drawText('Customer Signature', {
-            x: width - this.margin - 110,
-            y: signatureY - 15,
-            size: 10,
-            font: font,
+            currentY -= 20;
         });
         
-        // Then draw signature lines ABOVE the labels
+        return currentY;
+    }
+
+    drawSignatures(page, width, startY, bill, regularFont, boldFont) {
+        // Fixed position from bottom of page
+        const signatureY = startY;
+        
+        // Left signature (Dealer)
         page.drawLine({
             start: { x: this.margin, y: signatureY },
             end: { x: this.margin + 150, y: signatureY },
             thickness: 1,
-            color: rgb(0, 0, 0),
+            color: COLOR_BLACK
         });
-
+        
+        page.drawText('Authorized Signature', {
+            x: this.margin + 15,
+            y: signatureY - 15,
+            size: 10,
+            font: regularFont,
+            color: COLOR_BLACK
+        });
+        
+        // Right signature (Customer)
         page.drawLine({
             start: { x: width - this.margin - 150, y: signatureY },
             end: { x: width - this.margin, y: signatureY },
             thickness: 1,
-            color: rgb(0, 0, 0),
+            color: COLOR_BLACK
         });
-
-        // Thank you message - properly spaced from signatures
+        
+        page.drawText('Customer Signature', {
+            x: width - this.margin - 115,
+            y: signatureY - 15,
+            size: 10,
+            font: regularFont,
+            color: COLOR_BLACK
+        });
+        
+        // Thank you message (center aligned)
         const thankYouText = 'Thank you for your business!';
-        const thankYouWidth = font.widthOfTextAtSize(thankYouText, 12);
+        const thankYouWidth = regularFont.widthOfTextAtSize(thankYouText, 12);
+        
         page.drawText(thankYouText, {
             x: (width - thankYouWidth) / 2,
             y: signatureY - 40,
             size: 12,
             font: boldFont,
+            color: COLOR_BLACK
         });
+    }
+
+    drawTableRow(page, x, y, columns, font, isHighlighted = false) {
+        const colWidths = [150, 250];
+        const rowHeight = this.spacing.tableRowHeight;
+        const padding = 10;
+        
+        // Background and borders
+        page.drawRectangle({
+            x,
+            y: y - rowHeight,
+            width: colWidths[0] + colWidths[1],
+            height: rowHeight,
+            borderWidth: 1,
+            borderColor: COLOR_BLACK,
+            color: isHighlighted ? COLOR_GRAY_LIGHT : COLOR_WHITE,
+        });
+        
+        // Vertical divider
+        page.drawLine({
+            start: { x: x + colWidths[0], y },
+            end: { x: x + colWidths[0], y: y - rowHeight },
+            thickness: 1,
+            color: COLOR_BLACK
+        });
+        
+        // Column text
+        columns.forEach((text, index) => {
+            const textX = x + (index === 0 ? padding : colWidths[0] + padding);
+            const textY = y - (rowHeight / 2) - 6; // Vertical centering
+            
+            page.drawText(text || '', {
+                x: textX,
+                y: textY,
+                size: 12,
+                font,
+                color: COLOR_BLACK
+            });
+        });
+        
+        return y - rowHeight;
     }
 
     getBillTypeText(billType) {
@@ -468,45 +493,39 @@ export class PDFGenerator {
         return `Rs. ${amount.toLocaleString()}.00`;
     }
 
-    // Helper method to draw table rows with borders - improved version
-    drawTableBorderedRow(page, x, y, columns, font, isTotal = false) {
-        const colWidths = [150, 250];
-        const rowHeight = 25;
-        const padding = 10;
-
-        // Draw outer rectangle
-        page.drawRectangle({
-            x,
-            y: y - rowHeight,
-            width: colWidths[0] + colWidths[1],
-            height: rowHeight,
-            borderWidth: 1,
-            borderColor: rgb(0, 0, 0),
-            color: isTotal ? rgb(0.95, 0.95, 0.95) : rgb(1, 1, 1),
-        });
-
-        // Draw vertical divider
-        page.drawLine({
-            start: { x: x + colWidths[0], y },
-            end: { x: x + colWidths[0], y: y - rowHeight },
-            thickness: 1,
-            color: rgb(0, 0, 0),
-        });
-
-        // Draw text
-        columns.forEach((text, index) => {
-            const textX = x + (index === 0 ? padding : colWidths[0] + padding);
-            const textY = y - rowHeight + (rowHeight - 12) / 2;
+    async getModelIsEbicycle(modelName) {
+        try {
+            if (!modelName) return false;
             
-            page.drawText(text || '', {
-                x: textX,
-                y: textY,
-                size: 12,
-                font: font,
-            });
-        });
-
-        return y - rowHeight;
+            // Special case handling for e-bicycles
+            const modelNameUpper = modelName.toUpperCase();
+            if (modelNameUpper.includes('COLA5') || modelNameUpper.includes('X01')) {
+                console.log(`Model ${modelName} identified as e-bicycle by name pattern`);
+                return true;
+            }
+            
+            // Database lookup
+            try {
+                const db = getDatabase();
+                const result = await db.query(
+                    'SELECT is_ebicycle FROM bike_models WHERE model_name = $1',
+                    [modelName]
+                );
+                
+                if (result.rows.length > 0) {
+                    return result.rows[0].is_ebicycle;
+                }
+            } catch (dbError) {
+                console.error('Database error checking model type:', dbError);
+                // Continue with fallback
+            }
+            
+            // Fallback to false
+            return false;
+        } catch (error) {
+            console.error('Error determining if model is e-bicycle:', error);
+            return false;
+        }
     }
 }
 
