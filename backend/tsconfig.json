@@ -9,7 +9,10 @@
     "skipLibCheck": true,
     "outDir": "dist",
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "declaration": true,
+    "typeRoots": ["./node_modules/@types", "./src/@types"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

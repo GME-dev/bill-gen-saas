@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+// Use type assertion to work around missing declaration files
 import { initializeDatabase } from './utils/database.js';
 import billsRouter from './routes/bills.js';
 import bikeModelsRouter from './routes/bike-models.js';
@@ -22,7 +23,7 @@ initializeDatabase()
   .then(() => {
     console.log('Database connection initialized');
   })
-  .catch(error => {
+  .catch((error: unknown) => {
     console.error('Failed to initialize database:', error);
     process.exit(1);
   });
@@ -32,13 +33,16 @@ app.use('/api/bills', billsRouter);
 app.use('/api/bike-models', bikeModelsRouter);
 app.use('/health', healthRouter);
 
+// Define a type for Router with handle method
+type RouterWithHandle = express.Router & { handle: (req: express.Request, res: express.Response) => void };
+
 // Add direct PDF routes
 app.get('/api/bills/:id/pdf', (req, res) => {
-  billsRouter.handle(req, res);
+  (billsRouter as RouterWithHandle).handle(req, res);
 });
 
 app.get('/api/bills/preview/pdf', (req, res) => {
-  billsRouter.handle(req, res);
+  (billsRouter as RouterWithHandle).handle(req, res);
 });
 
 // Start server
