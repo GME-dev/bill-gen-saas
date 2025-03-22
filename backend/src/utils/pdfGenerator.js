@@ -42,301 +42,337 @@ export class PDFGenerator {
 
     async generateBill(bill) {
         try {
-            // Normalize and validate bill data
-            const normalizedBill = this.normalizeBillData(bill);
-            
+            // Create a normalized bill object with defaults for missing values
+            const normalizedBill = {
+                bill_number: bill.bill_number || bill._id || bill.id || 'PREVIEW',
+                bill_date: bill.bill_date || new Date(),
+                customer_name: bill.customer_name || 'N/A',
+                customer_nic: bill.customer_nic || 'N/A',
+                customer_address: bill.customer_address || 'N/A',
+                model_name: bill.model_name || 'N/A',
+                motor_number: bill.motor_number || 'N/A',
+                chassis_number: bill.chassis_number || 'N/A',
+                bike_price: parseFloat(bill.bike_price) || 0,
+                bill_type: (bill.bill_type || 'CASH').toUpperCase(),
+                is_ebicycle: bill.is_ebicycle || false,
+                down_payment: parseFloat(bill.down_payment) || 0,
+                advance_amount: parseFloat(bill.advance_amount) || 0,
+                estimated_delivery_date: bill.estimated_delivery_date || null
+            };
+
             // Create PDF document
             const pdfDoc = await PDFDocument.create();
-            
-            // Set document metadata
-            pdfDoc.setTitle(`Invoice - ${normalizedBill.bill_number}`);
-            pdfDoc.setAuthor(COMPANY_INFO.name);
-            pdfDoc.setSubject(`Bill #${normalizedBill.bill_number}`);
-            pdfDoc.setKeywords(['invoice', 'bill', 'motorcycle', 'TMR']);
-            
-            // Add page
             const page = pdfDoc.addPage([this.pageWidth, this.pageHeight]);
             const { width, height } = page.getSize();
             
             // Embed fonts
-            const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
             const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-
-            // Draw content sections
-            let yPosition = height - this.margin;
             
-            // Header with logo and title
-            yPosition = await this.drawHeader(pdfDoc, page, width, yPosition, normalizedBill, regularFont, boldFont);
+            // Document metadata
+            pdfDoc.setTitle(`Invoice - ${normalizedBill.bill_number}`);
+            pdfDoc.setAuthor('TMR TRADING LANKA (PVT) LIMITED');
+            pdfDoc.setSubject(`Bill #${normalizedBill.bill_number}`);
             
-            // Customer information section
-            yPosition = this.drawCustomerInformation(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
+            // Draw header
+            await this.drawHeader(pdfDoc, page, width, height, normalizedBill, font, boldFont);
             
-            // Vehicle information section
-            yPosition = this.drawVehicleInformation(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
+            // Draw customer details
+            const customerY = height - this.margin - 130;
+            this.drawCustomerDetails(page, width, customerY, normalizedBill, font, boldFont);
             
-            // Price details
-            yPosition = this.drawPriceDetails(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
+            // Draw vehicle details
+            const vehicleY = customerY - 120;
+            this.drawVehicleDetails(page, width, vehicleY, normalizedBill, font, boldFont);
             
-            // Terms and conditions
-            yPosition = this.drawTermsAndConditions(page, width, yPosition - this.spacing.sectionGap, normalizedBill, regularFont, boldFont);
+            // Draw payment details
+            const paymentY = vehicleY - 120;
+            this.drawPaymentDetails(page, width, paymentY, normalizedBill, font, boldFont);
             
-            // Signatures section
-            this.drawSignatures(page, width, this.margin + this.spacing.signatureSpace, normalizedBill, regularFont, boldFont);
+            // Draw terms and conditions
+            const termsY = paymentY - 150;
+            this.drawTermsAndConditions(page, width, termsY, normalizedBill, font, boldFont);
+            
+            // Draw footer and signatures
+            this.drawFooterAndSignatures(page, width, normalizedBill, font, boldFont);
             
             return await pdfDoc.save();
         } catch (error) {
-            console.error('Error generating bill PDF:', error);
-            throw error;
+            console.error('Error generating PDF:', error);
+            throw new Error(`Failed to generate PDF: ${error.message}`);
         }
     }
 
-    normalizeBillData(bill) {
-        // Default values for all required fields
-        return {
-            ...bill,
-            bill_number: bill.bill_number || bill._id || bill.id || 'PREVIEW',
-            bill_date: bill.bill_date || new Date(),
-            customer_name: bill.customer_name || 'N/A',
-            customer_nic: bill.customer_nic || 'N/A',
-            customer_address: bill.customer_address || 'N/A',
-            model_name: bill.model_name || 'N/A',
-            motor_number: bill.motor_number || 'N/A',
-            chassis_number: bill.chassis_number || 'N/A',
-            bike_price: parseFloat(bill.bike_price) || 0,
-            bill_type: (bill.bill_type || 'CASH').toUpperCase(),
-            is_ebicycle: bill.is_ebicycle || false,
-            down_payment: parseFloat(bill.down_payment) || 0,
-            advance_amount: parseFloat(bill.advance_amount) || 0,
-            estimated_delivery_date: bill.estimated_delivery_date || null
-        };
-    }
-
-    async drawHeader(pdfDoc, page, width, startY, bill, regularFont, boldFont) {
+    async drawHeader(pdfDoc, page, width, height, bill, font, boldFont) {
         try {
-            // Center "INVOICE" title
-            const titleText = 'INVOICE';
-            const titleWidth = boldFont.widthOfTextAtSize(titleText, 18);
-            page.drawText(titleText, {
-                x: (width - titleWidth) / 2,
-                y: startY,
-                size: 18,
+            // Bill details (right aligned)
+            const billNoText = `Bill No: ${bill.bill_number}`;
+            const billNoWidth = font.widthOfTextAtSize(billNoText, 12);
+            page.drawText(billNoText, {
+                x: width - this.margin - billNoWidth,
+                y: height - this.margin,
+                size: 12,
                 font: boldFont,
                 color: COLOR_BLACK
             });
-            
-            // Bill type (CASH/LEASING/ADVANCE)
-            const billTypeText = this.getBillTypeText(bill.bill_type);
-            const billTypeWidth = boldFont.widthOfTextAtSize(billTypeText, 14);
-            page.drawText(billTypeText, {
-                x: (width - billTypeWidth) / 2,
-                y: startY - 25,
-                size: 14,
-                font: boldFont,
+
+            const dateText = `Date: ${this.formatDate(bill.bill_date)}`;
+            const dateWidth = font.widthOfTextAtSize(dateText, 12);
+            page.drawText(dateText, {
+                x: width - this.margin - dateWidth,
+                y: height - this.margin - 20,
+                size: 12,
+                font,
                 color: COLOR_BLACK
             });
             
-            // Company information (left side)
-            const companyY = startY - 60;
-            
-            // Try to add logo from base64
+            // Logo and company name
             try {
-                // Extract the base64 data (removing the data:image/png;base64, prefix)
+                // Extract the base64 data
                 const base64Data = INLINE_LOGO_BASE64.trim().split(',')[1];
                 const logoBytes = Buffer.from(base64Data, 'base64');
                 
                 // Embed the logo
                 const logoImage = await pdfDoc.embedPng(logoBytes);
                 
-                // Draw the logo on the left
+                // Draw the logo
+                const logoWidth = 70;
+                const logoHeight = logoWidth;
+                
                 page.drawImage(logoImage, {
                     x: this.margin,
-                    y: companyY - 35,
-                    width: 40,
-                    height: 40,
+                    y: height - this.margin - logoHeight + 25,
+                    width: logoWidth,
+                    height: logoHeight,
                 });
                 
                 // Company name next to logo
-                page.drawText(COMPANY_INFO.name, {
-                    x: this.margin + 50,
-                    y: companyY,
-                    size: 14,
+                page.drawText('TMR TRADING LANKA (PVT) LIMITED', {
+                    x: this.margin + 85,
+                    y: height - this.margin - 20,
+                    size: 18,
                     font: boldFont,
                     color: COLOR_BLACK
                 });
             } catch (logoError) {
                 console.error("Error embedding logo:", logoError);
                 // Fallback to text-only header
-                page.drawText(COMPANY_INFO.name, {
+                page.drawText('TMR TRADING LANKA (PVT) LIMITED', {
                     x: this.margin,
-                    y: companyY,
-                    size: 14,
+                    y: height - this.margin - 20,
+                    size: 18,
                     font: boldFont,
                     color: COLOR_BLACK
                 });
             }
             
-            // Company address and dealer info
-            page.drawText(COMPANY_INFO.address, {
+            // Dealer information
+            page.drawText('GUNAWARDANA MOTORS, EMBILIPITIYA', {
                 x: this.margin,
-                y: companyY - 20,
-                size: 12,
-                font: regularFont,
+                y: height - this.margin - 60,
+                size: 14,
+                font: boldFont,
                 color: COLOR_BLACK
             });
             
-            page.drawText(COMPANY_INFO.dealer, {
+            page.drawText('AUTHORIZED DEALER - EMBILIPITIYA', {
                 x: this.margin,
-                y: companyY - 40,
+                y: height - this.margin - 80,
                 size: 12,
-                font: regularFont,
+                font: boldFont,
                 color: COLOR_BLACK
             });
             
-            // Bill details (right side)
-            const billNoText = `Bill No: ${bill.bill_number}`;
-            const dateText = `Date: ${this.formatDate(bill.bill_date)}`;
+            // Draw a separator line
+            page.drawLine({
+                start: { x: this.margin, y: height - this.margin - 100 },
+                end: { x: width - this.margin, y: height - this.margin - 100 },
+                thickness: 1,
+                color: COLOR_BLACK,
+            });
             
-            const billNoWidth = regularFont.widthOfTextAtSize(billNoText, 12);
-            const dateWidth = regularFont.widthOfTextAtSize(dateText, 12);
-            
-            page.drawText(billNoText, {
-                x: width - this.margin - billNoWidth,
-                y: companyY,
-                size: 12,
-                font: regularFont,
+            // Draw bill type header
+            const billTypeText = this.getBillTypeText(bill.bill_type);
+            const billTypeWidth = boldFont.widthOfTextAtSize(billTypeText, 14);
+            page.drawText(billTypeText, {
+                x: (width - billTypeWidth) / 2,
+                y: height - this.margin - 115,
+                size: 14,
+                font: boldFont,
                 color: COLOR_BLACK
             });
             
-            page.drawText(dateText, {
-                x: width - this.margin - dateWidth,
-                y: companyY - 20,
-                size: 12,
-                font: regularFont,
-                color: COLOR_BLACK
-            });
-            
-            return companyY - 60; // Return position for next section
         } catch (error) {
             console.error('Error drawing header:', error);
-            return startY - 120; // Fallback position
         }
     }
 
-    drawCustomerInformation(page, width, startY, bill, regularFont, boldFont) {
-        // Section title
-        page.drawText('Customer Information', {
+    drawCustomerDetails(page, width, startY, bill, font, boldFont) {
+        page.drawText('Customer Details:', {
             x: this.margin,
             y: startY,
             size: 14,
             font: boldFont,
             color: COLOR_BLACK
         });
-        
-        // Create customer info table
-        const tableData = [
-            {label: 'Name', value: bill.customer_name},
-            {label: 'NIC', value: bill.customer_nic},
-            {label: 'Address', value: bill.customer_address}
+
+        const customerDetails = [
+            [`Name: ${bill.customer_name}`],
+            [`NIC: ${bill.customer_nic}`],
+            [`Address: ${bill.customer_address}`],
         ];
-        
-        let currentY = startY - 30;
-        
-        // Draw table rows
-        tableData.forEach(({label, value}) => {
-            currentY = this.drawTableRow(page, this.margin, currentY, [label, value], regularFont);
+
+        customerDetails.forEach((line, index) => {
+            page.drawText(line, {
+                x: this.margin,
+                y: startY - 25 - (index * 20),
+                size: 12,
+                font,
+                color: COLOR_BLACK
+            });
         });
-        
-        return currentY;
     }
 
-    drawVehicleInformation(page, width, startY, bill, regularFont, boldFont) {
-        // Section title
-        page.drawText('Vehicle Information', {
+    drawVehicleDetails(page, width, startY, bill, font, boldFont) {
+        page.drawText('Vehicle Details:', {
             x: this.margin,
             y: startY,
             size: 14,
             font: boldFont,
             color: COLOR_BLACK
         });
-        
-        // Create vehicle info table
-        const tableData = [
-            {label: 'Model', value: bill.model_name},
-            {label: 'Type', value: bill.is_ebicycle ? 'E-bicycle' : 'E-bike'},
-            {label: 'Motor Number', value: bill.motor_number},
-            {label: 'Chassis Number', value: bill.chassis_number}
+
+        const vehicleDetails = [
+            [`Model: ${bill.model_name}`],
+            [`Type: ${bill.is_ebicycle ? 'E-bicycle' : 'E-bike'}`],
+            [`Motor Number: ${bill.motor_number}`],
+            [`Chassis Number: ${bill.chassis_number}`],
         ];
-        
-        let currentY = startY - 30;
-        
-        // Draw table rows
-        tableData.forEach(({label, value}) => {
-            currentY = this.drawTableRow(page, this.margin, currentY, [label, value], regularFont);
+
+        vehicleDetails.forEach((line, index) => {
+            page.drawText(line, {
+                x: this.margin,
+                y: startY - 25 - (index * 20),
+                size: 12,
+                font,
+                color: COLOR_BLACK
+            });
         });
-        
-        return currentY;
     }
 
-    drawPriceDetails(page, width, startY, bill, regularFont, boldFont) {
-        // Section title
-        page.drawText('Price Details:', {
+    drawPaymentDetails(page, width, startY, bill, font, boldFont) {
+        page.drawText('Payment Details:', {
             x: this.margin,
             y: startY,
             size: 14,
             font: boldFont,
             color: COLOR_BLACK
         });
-        
+
         // Draw payment details table
-        let currentY = startY - 30;
+        let tableY = startY - 30;
         
-        // Draw price rows based on bill type and vehicle type
+        // Table header
+        tableY = this.drawTableRow(
+            page,
+            this.margin,
+            tableY,
+            ['Description', 'Amount (Rs.)'],
+            boldFont,
+            12,
+            true
+        );
+
+        // Calculate values
         const bikePrice = bill.bike_price;
         const rmvCharge = bill.is_ebicycle ? 0 : 13000;
         const totalAmount = bikePrice + rmvCharge;
         
-        // Bike price row
-        currentY = this.drawTableRow(page, this.margin, currentY, 
-            ['Bike Price', this.formatAmount(bikePrice)], regularFont);
-        
+        // Table rows
+        tableY = this.drawTableRow(
+            page,
+            this.margin,
+            tableY,
+            ['Bike Price', this.formatAmount(bikePrice)],
+            font
+        );
+
         // RMV charge row (if applicable)
         if (!bill.is_ebicycle) {
-            currentY = this.drawTableRow(page, this.margin, currentY, 
-                ['RMV Charge', this.formatAmount(rmvCharge)], regularFont);
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['RMV Charge', this.formatAmount(rmvCharge)],
+                font
+            );
         }
-        
+
         // Additional rows based on bill type
         if (bill.bill_type === 'LEASING') {
-            currentY = this.drawTableRow(page, this.margin, currentY,
-                ['Down Payment', this.formatAmount(bill.down_payment)], regularFont);
-                
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Down Payment', this.formatAmount(bill.down_payment)],
+                font
+            );
+            
             // Total row for leasing (down payment)
-            currentY = this.drawTableRow(page, this.margin, currentY,
-                ['Total Amount', `${this.formatAmount(bill.down_payment)} (D/P)`], boldFont, true);
+            this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Total Amount', `${this.formatAmount(bill.down_payment)} (D/P)`],
+                boldFont,
+                12,
+                true
+            );
         }
         else if (bill.bill_type === 'ADVANCE') {
-            currentY = this.drawTableRow(page, this.margin, currentY,
-                ['Advance Amount', this.formatAmount(bill.advance_amount)], regularFont);
-                
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Advance Amount', this.formatAmount(bill.advance_amount)],
+                font
+            );
+            
             const balance = totalAmount - bill.advance_amount;
-            currentY = this.drawTableRow(page, this.margin, currentY,
-                ['Balance Amount', this.formatAmount(balance)], regularFont);
-                
+            tableY = this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Balance Amount', this.formatAmount(balance)],
+                font
+            );
+            
             // Total row for advance payment
-            currentY = this.drawTableRow(page, this.margin, currentY,
-                ['Total Amount', this.formatAmount(totalAmount)], boldFont, true);
+            this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Total Amount', this.formatAmount(totalAmount)],
+                boldFont,
+                12,
+                true
+            );
         }
         else {
             // Total row for cash bill
-            currentY = this.drawTableRow(page, this.margin, currentY,
-                ['Total Amount', this.formatAmount(totalAmount)], boldFont, true);
+            this.drawTableRow(
+                page,
+                this.margin,
+                tableY,
+                ['Total Amount', this.formatAmount(totalAmount)],
+                boldFont,
+                12,
+                true
+            );
         }
-        
-        return currentY;
     }
-
-    drawTermsAndConditions(page, width, startY, bill, regularFont, boldFont) {
-        // Section title
+    
+    drawTermsAndConditions(page, width, startY, bill, font, boldFont) {
         page.drawText('Terms and Conditions:', {
             x: this.margin,
             y: startY,
@@ -344,125 +380,116 @@ export class PDFGenerator {
             font: boldFont,
             color: COLOR_BLACK
         });
-        
-        // Terms as bullet points
+
         const terms = [
-            '1. All prices are in Sri Lankan Rupees.',
-            '2. Chassis Number is valid for 30 days from the issue date.',
-            '3. This is a computer-generated document and does not require a signature.',
-            '4. Please retain this invoice for future reference.'
+            '1. All prices are inclusive of taxes.',
+            '2. Warranty is subject to terms and conditions.',
+            '3. This is a computer-generated bill.',
         ];
-        
+
         // Add bill-specific terms
         if (bill.bill_type === 'LEASING') {
-            terms.push('5. Balance amount will be settled by the leasing company.');
+            terms.push('4. Balance amount will be settled by the leasing company.');
         } else if (bill.bill_type === 'ADVANCE' && bill.estimated_delivery_date) {
-            terms.push(`5. Estimated delivery date: ${this.formatDate(bill.estimated_delivery_date)}`);
+            terms.push(`4. Estimated delivery date: ${this.formatDate(bill.estimated_delivery_date)}`);
+        } else {
+            terms.push('4. RMV registration will be completed within 30 days.');
         }
-        
-        // Draw each term with proper spacing
-        let currentY = startY - 20;
-        terms.forEach(term => {
-            page.drawText(term, {
-                x: this.margin,
-                y: currentY,
-                size: 10,
-                font: regularFont,
-                color: COLOR_BLACK
-            });
-            currentY -= 20;
-        });
-        
-        return currentY;
-    }
 
-    drawSignatures(page, width, startY, bill, regularFont, boldFont) {
-        // Fixed position from bottom of page
-        const signatureY = 120; // Fixed position from bottom
-        
-        // Left signature (Dealer)
-        page.drawLine({
-            start: { x: this.margin, y: signatureY },
-            end: { x: this.margin + 150, y: signatureY },
-            thickness: 1,
-            color: COLOR_BLACK
+        terms.forEach((line, index) => {
+            page.drawText(line, {
+                x: this.margin,
+                y: startY - 20 - (index * 15),
+                size: 10,
+                font,
+                color: rgb(0.3, 0.3, 0.3),
+            });
         });
+    }
+    
+    drawFooterAndSignatures(page, width, bill, font, boldFont) {
+        const signatureY = 140; // Fixed position from bottom
         
-        page.drawText('Authorized Signature', {
-            x: this.margin + 15,
-            y: signatureY - 15,
-            size: 10,
-            font: regularFont,
-            color: COLOR_BLACK
-        });
-        
-        // Right signature (Customer)
-        page.drawLine({
-            start: { x: width - this.margin - 150, y: signatureY },
-            end: { x: width - this.margin, y: signatureY },
-            thickness: 1,
-            color: COLOR_BLACK
-        });
-        
-        page.drawText('Customer Signature', {
-            x: width - this.margin - 115,
-            y: signatureY - 15,
-            size: 10,
-            font: regularFont,
-            color: COLOR_BLACK
-        });
-        
-        // Thank you message (center aligned)
-        const thankYouText = 'Thank you for your business!';
-        const thankYouWidth = regularFont.widthOfTextAtSize(thankYouText, 12);
-        
-        page.drawText(thankYouText, {
-            x: (width - thankYouWidth) / 2,
-            y: signatureY - 40,
+        // Thank you message
+        page.drawText('Thank you for your business!', {
+            x: width / 2 - 70,
+            y: signatureY + 60,
             size: 12,
             font: boldFont,
             color: COLOR_BLACK
         });
+        
+        // Dealer signature
+        page.drawLine({
+            start: { x: this.margin, y: signatureY },
+            end: { x: this.margin + 150, y: signatureY },
+            thickness: 1,
+            color: COLOR_BLACK,
+        });
+        
+        page.drawText('Dealer Signature', {
+            x: this.margin,
+            y: signatureY - 15,
+            size: 10,
+            font,
+            color: COLOR_BLACK
+        });
+
+        // Customer signature
+        page.drawLine({
+            start: { x: width - this.margin - 150, y: signatureY },
+            end: { x: width - this.margin, y: signatureY },
+            thickness: 1,
+            color: COLOR_BLACK,
+        });
+        
+        page.drawText('Customer Signature', {
+            x: width - this.margin - 150,
+            y: signatureY - 15,
+            size: 10,
+            font,
+            color: COLOR_BLACK
+        });
     }
 
-    drawTableRow(page, x, y, columns, font, isHighlighted = false) {
-        const colWidths = [150, 250];
-        const rowHeight = this.spacing.tableRowHeight;
+    drawTableRow(page, x, y, columns, font, fontSize = 12, isHeader = false) {
+        const colWidths = [200, 200];  // Adjust column widths as needed
         const padding = 10;
-        
-        // Background and borders
+        const rowHeight = 25;
+
+        // Draw cell borders and background
         page.drawRectangle({
             x,
             y: y - rowHeight,
             width: colWidths[0] + colWidths[1],
             height: rowHeight,
             borderWidth: 1,
-            borderColor: COLOR_BLACK,
-            color: isHighlighted ? COLOR_GRAY_LIGHT : COLOR_WHITE,
+            borderColor: COLOR_GRAY,
+            color: isHeader ? COLOR_GRAY_LIGHT : COLOR_WHITE,
         });
-        
-        // Vertical divider
+
+        // Draw vertical line between columns
         page.drawLine({
             start: { x: x + colWidths[0], y },
             end: { x: x + colWidths[0], y: y - rowHeight },
             thickness: 1,
-            color: COLOR_BLACK
+            color: COLOR_GRAY,
         });
-        
-        // Column text
+
+        // Draw text in cells
         columns.forEach((text, index) => {
-            const textX = x + (index === 0 ? padding : colWidths[0] + padding);
-            const textY = y - (rowHeight / 2) - 6; // Vertical centering
+            // Center text vertically in the cell
+            const textY = y - rowHeight / 2 - fontSize / 3;
             
             page.drawText(text || '', {
-                x: textX,
+                x: x + (index === 0 ? padding : colWidths[0] + padding),
                 y: textY,
-                size: 12,
+                size: fontSize,
                 font,
                 color: COLOR_BLACK
             });
         });
-        
+
         return y - rowHeight;
     }
 
@@ -495,9 +522,9 @@ export class PDFGenerator {
 
     formatAmount(amount) {
         if (amount === undefined || amount === null || isNaN(amount)) {
-            return 'Rs. 0.00';
+            return '0.00';
         }
-        return `Rs. ${amount.toLocaleString()}.00`;
+        return `${amount.toLocaleString()}.00`;
     }
 
     async getModelIsEbicycle(modelName) {
