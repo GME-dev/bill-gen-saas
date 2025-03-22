@@ -151,7 +151,7 @@ export class PDFGenerator {
             // Draw price details
             currentY = this.drawPriceDetails(page, width, currentY - 40, normalizedBill, font, boldFont);
             
-            // Draw terms and signature
+            // Draw terms and signature - pass the currentY so it knows where to start
             this.drawTermsAndSignature(page, width, currentY - 40, normalizedBill, font, boldFont);
             
             return await pdfDoc.save();
@@ -355,6 +355,8 @@ export class PDFGenerator {
     }
 
     drawTermsAndSignature(page, width, startY, bill, font, boldFont) {
+        const { height } = page.getSize();
+        
         // Add proper spacing between sections
         startY = startY - 40;
         
@@ -388,37 +390,37 @@ export class PDFGenerator {
             });
         });
 
-        // Calculate signature position with proper spacing
-        // Make sure it's at least 100px below the last term
-        const lastTermY = startY - (terms.length * 20);
-        const signatureY = Math.min(lastTermY - 100, this.margin + 100);
+        // FIXED SIGNATURE POSITION: Always 100 units from bottom of page
+        const signatureY = 100;
         
-        // Left signature
+        // Draw signature labels FIRST
+        page.drawText('Authorized Signature', {
+            x: this.margin + 10,
+            y: signatureY - 15,
+            size: 10,
+            font: font,
+        });
+
+        page.drawText('Customer Signature', {
+            x: width - this.margin - 110,
+            y: signatureY - 15,
+            size: 10,
+            font: font,
+        });
+        
+        // Then draw signature lines ABOVE the labels
         page.drawLine({
             start: { x: this.margin, y: signatureY },
             end: { x: this.margin + 150, y: signatureY },
             thickness: 1,
             color: rgb(0, 0, 0),
         });
-        page.drawText('Authorized Signature', {
-            x: this.margin + 20,
-            y: signatureY - 15,
-            size: 10,
-            font: font,
-        });
 
-        // Right signature
         page.drawLine({
             start: { x: width - this.margin - 150, y: signatureY },
             end: { x: width - this.margin, y: signatureY },
             thickness: 1,
             color: rgb(0, 0, 0),
-        });
-        page.drawText('Customer Signature', {
-            x: width - this.margin - 130,
-            y: signatureY - 15,
-            size: 10,
-            font: font,
         });
 
         // Thank you message - properly spaced from signatures
@@ -426,7 +428,7 @@ export class PDFGenerator {
         const thankYouWidth = font.widthOfTextAtSize(thankYouText, 12);
         page.drawText(thankYouText, {
             x: (width - thankYouWidth) / 2,
-            y: signatureY - 50,
+            y: signatureY - 40,
             size: 12,
             font: boldFont,
         });
