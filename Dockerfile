@@ -3,17 +3,21 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy backend files
+# Copy package files
 COPY backend/package*.json ./
+
+# Install dependencies
 RUN npm install
 
-COPY backend/ ./
+# Copy backend source code
+COPY backend/src ./src
+COPY backend/templates ./templates
 
-# Environment variables
-ENV NODE_ENV=development
-ENV PORT=3000
-ENV CORS_ORIGIN=http://localhost:5173
+# Set environment variables
+ENV NODE_ENV=production
 
+# Expose port
 EXPOSE 3000
 
-CMD ["npm", "run", "dev"]
+# Start the application
+CMD ["npm", "start"]
