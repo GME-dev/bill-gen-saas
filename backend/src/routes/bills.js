@@ -399,12 +399,14 @@ router.get('/:id/generate', async (req, res) => {
     const items = await db.all('SELECT * FROM bill_items WHERE bill_id = ?', [req.params.id])
     bill.items = items
     
-    const docxBuffer = await generateBill(bill)
+    // Use the PDFGenerator to generate the document
+    const docxBuffer = await pdfGenerator.generateBill(bill, 'docx')
     
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
     res.setHeader('Content-Disposition', `attachment; filename=bill-${bill.id}.docx`)
     res.send(docxBuffer)
   } catch (error) {
+    console.error('Error generating DOCX:', error);
     res.status(500).json({ error: error.message })
   }
 })

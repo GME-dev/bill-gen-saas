@@ -1,4 +1,6 @@
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib'
+import PizZip from 'pizzip'
+import Docxtemplater from 'docxtemplater'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -30,6 +32,7 @@ export class PDFGenerator {
         this.pageHeight = 841.89;  // A4 height in points
         this.margin = 50;
         this.logoPath = path.join(__dirname, '../assets/logo.png')
+        this.templatePath = path.join(__dirname, '../templates/bill-template.docx')
         
         // Spacing configuration
         this.spacing = {
@@ -44,7 +47,62 @@ export class PDFGenerator {
         };
     }
 
-    async generateBill(bill) {
+    async generateBill(bill, format = 'pdf') {
+        try {
+            if (format === 'docx') {
+                return await this.generateDocx(bill);
+            }
+            return await this.generatePDF(bill);
+        } catch (error) {
+            console.error(`Error generating ${format.toUpperCase()}:`, error);
+            throw error;
+        }
+    }
+
+    async generateDocx(bill) {
+        try {
+            // Read the template
+            const content = fs.readFileSync(this.templatePath, 'binary');
+            const zip = new PizZip(content);
+            
+            // Create a new document
+            const doc = new Docxtemplater(zip, {
+                paragraphLoop: true,
+                linebreaks: true
+            });
+            
+            // Format the data
+            const data = {
+                bill_number: bill.bill_number || bill._id || 'PREVIEW',
+                customer_name: bill.customer_name || 'N/A',
+                customer_nic: bill.customer_nic || 'N/A',
+                customer_address: bill.customer_address || 'N/A',
+                bill_date: new Date(bill.bill_date).toLocaleDateString(),
+                model_name: bill.model_name || 'N/A',
+                motor_number: bill.motor_number || 'N/A',
+                chassis_number: bill.chassis_number || 'N/A',
+                bike_price: this.formatAmount(bill.bike_price),
+                total_amount: this.formatAmount(bill.total_amount),
+                bill_type: (bill.bill_type || 'CASH').toUpperCase()
+            };
+            
+            // Render the document
+            doc.render(data);
+            
+            // Generate and return the document
+            const buffer = doc.getZip().generate({
+                type: 'nodebuffer',
+                compression: 'DEFLATE'
+            });
+            
+            return buffer;
+        } catch (error) {
+            console.error('Error generating DOCX:', error);
+            throw error;
+        }
+    }
+
+    async generatePDF(bill) {
         try {
             // Create a normalized bill object with defaults for missing values
             const normalizedBill = {
