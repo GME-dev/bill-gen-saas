@@ -1,6 +1,7 @@
 import express from 'express'
 import { getDatabase, initializeDatabase } from '../utils/database.js'
 import { PDFGenerator } from '../utils/pdfGenerator.js'
+import { ObjectId } from 'mongodb'
 
 const router = express.Router()
 const pdfGenerator = new PDFGenerator()
@@ -15,26 +16,26 @@ async function repairAllCola5Bills() {
     await initializeDatabase();
     const db = getDatabase();
     
-    // Find all bills with COLA5 in model name
-    const bills = await db.query(
-      "SELECT id, model_name, bike_price, total_amount FROM bills WHERE model_name ILIKE '%COLA5%'"
-    );
+    // Find all bills with COLA5 in model name using MongoDB query
+    const bills = await db.collection('bills').find({
+      model_name: { $regex: 'COLA5', $options: 'i' }
+    }).toArray();
     
-    console.log(`🔧 Found ${bills.rows.length} COLA5 bills that might need repair`);
+    console.log(`🔧 Found ${bills.length} COLA5 bills that might need repair`);
     
     // Process each bill
     let fixedCount = 0;
-    for (const bill of bills.rows) {
+    for (const bill of bills) {
       const bikePrice = parseFloat(bill.bike_price) || 0;
       const totalAmount = parseFloat(bill.total_amount) || 0;
       
       // If total amount includes RMV charges, fix it
       if (totalAmount > bikePrice) {
-        console.log(`🔧 Repairing bill #${bill.id} (${bill.model_name}): Changing total from ${totalAmount} to ${bikePrice}`);
+        console.log(`🔧 Repairing bill #${bill._id} (${bill.model_name}): Changing total from ${totalAmount} to ${bikePrice}`);
         
-        await db.query(
-          'UPDATE bills SET total_amount = $1 WHERE id = $2',
-          [bikePrice, bill.id]
+        await db.collection('bills').updateOne(
+          { _id: bill._id },
+          { $set: { total_amount: bikePrice } }
         );
         
         fixedCount++;
@@ -54,11 +55,67 @@ repairAllCola5Bills();
 async function ensureDatabase(req, res, next) {
   try {
     await initializeDatabase();
+    const db = getDatabase();
+    
+    // Check if we actually have a valid database connection
+    if (!db) {
+      console.error('Database connection not available');
+      return res.status(503).json({ 
+        error: 'Database unavailable',
+        details: 'Unable to establish database connection'
+      });
+    }
+    
+    // Check database connectivity with a ping
+    try {
+      const pingResult = await db.command({ ping: 1 });
+      if (!pingResult || pingResult.ok !== 1) {
+        throw new Error('Database ping failed');
+      }
+    } catch (pingError) {
+      console.error('Database ping failed:', pingError);
+      return res.status(503).json({ 
+        error: 'Database unavailable',
+        details: 'Failed to verify database connectivity'
+      });
+    }
+    
+    // Database is connected and ready
     next();
   } catch (error) {
     console.error('Database initialization error:', error);
-    res.status(503).json({ error: 'Database unavailable' });
+    res.status(503).json({ 
+      error: 'Database unavailable',
+      details: error.message
+    });
   }
+}
+
+// Validate MongoDB ObjectId middleware
+function validateObjectId(idParam = 'id') {
+  return (req, res, next) => {
+    const id = req.params[idParam];
+    
+    if (!id) {
+      return next(); // No ID to validate, continue
+    }
+    
+    // Special case for preview and test routes
+    if (id === 'preview' || id === 'test') {
+      return next();
+    }
+    
+    // Check if the ID is a valid MongoDB ObjectId
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ 
+        error: 'Invalid ID format',
+        details: 'The provided ID is not a valid MongoDB ObjectId'
+      });
+    }
+    
+    // ID is valid, continue
+    next();
+  };
 }
 
 // Apply database middleware to all routes
@@ -68,8 +125,8 @@ router.use(ensureDatabase);
 router.get('/', async (req, res) => {
   try {
     const db = getDatabase()
-    const result = await db.query('SELECT * FROM bills ORDER BY bill_date DESC')
-    res.json(result.rows)
+    const bills = await db.collection('bills').find({}).sort({ bill_date: -1 }).toArray()
+    res.json(bills)
   } catch (error) {
     console.error('Error fetching bills:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -93,40 +150,17 @@ router.post('/test', async (req, res) => {
       down_payment: 100000,
       total_amount: 499500,
       balance_amount: 399500,
-      estimated_delivery_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      estimated_delivery_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      bill_date: new Date(),
+      status: 'pending'
     };
     
     const db = getDatabase();
-    const today = new Date().toISOString().split('T')[0];
     
-    const result = await db.query(
-      `INSERT INTO bills 
-      (bill_type, customer_name, customer_nic, customer_address, 
-      model_name, motor_number, chassis_number, bike_price, 
-      down_payment, bill_date, total_amount, balance_amount, 
-      estimated_delivery_date, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      RETURNING *`,
-      [
-        testBill.bill_type, 
-        testBill.customer_name, 
-        testBill.customer_nic, 
-        testBill.customer_address, 
-        testBill.model_name, 
-        testBill.motor_number, 
-        testBill.chassis_number, 
-        testBill.bike_price, 
-        testBill.down_payment, 
-        today,
-        testBill.total_amount,
-        testBill.balance_amount,
-        testBill.estimated_delivery_date,
-        'pending'
-      ]
-    );
+    const result = await db.collection('bills').insertOne(testBill);
 
-    console.log('Test bill created successfully:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
+    console.log('Test bill created successfully:', { ...testBill, _id: result.insertedId });
+    res.status(201).json({ ...testBill, _id: result.insertedId });
   } catch (error) {
     console.error('Error creating test bill:', error.message);
     console.error('Stack trace:', error.stack);
@@ -135,23 +169,18 @@ router.post('/test', async (req, res) => {
 });
 
 // Get a single bill
-router.get('/:id', async (req, res) => {
+router.get('/:id', validateObjectId(), async (req, res) => {
   try {
     const { id } = req.params
     
-    // Make sure id is a number
-    if (isNaN(parseInt(id))) {
-      return res.status(400).json({ error: 'Invalid bill ID' })
-    }
-    
     const db = getDatabase()
-    const result = await db.query('SELECT * FROM bills WHERE id = $1', [id])
+    const bill = await db.collection('bills').findOne({ _id: new ObjectId(id) })
     
-    if (result.rows.length === 0) {
+    if (!bill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
-
-    res.json(result.rows[0])
+    
+    res.json(bill)
   } catch (error) {
     console.error('Error fetching bill:', error)
     res.status(500).json({ error: 'Internal server error' })
@@ -208,13 +237,12 @@ router.post('/', async (req, res) => {
     // Double-check database for is_ebicycle flag - belt and suspenders
     try {
       const db = getDatabase();
-      const result = await db.query(
-        'SELECT is_ebicycle FROM bike_models WHERE model_name ILIKE $1',
-        [`%${modelString}%`]
-      );
+      const bikeModel = await db.collection('bike_models').findOne({
+        model_name: { $regex: modelString, $options: 'i' }
+      });
       
-      if (result.rows.length > 0) {
-        const dbIsEbicycle = result.rows[0].is_ebicycle;
+      if (bikeModel) {
+        const dbIsEbicycle = bikeModel.is_ebicycle;
         console.log(`🔎 Database is_ebicycle flag for ${modelString}: ${dbIsEbicycle}`);
         
         // If DB says it's an e-bicycle, respect that too
@@ -271,7 +299,7 @@ router.post('/', async (req, res) => {
     
     // Insert the bill
     const db = getDatabase();
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date();
     const status = is_advancement ? 'pending' : 'completed';
     
     console.log('Executing query with:', {
@@ -281,34 +309,32 @@ router.post('/', async (req, res) => {
       estimated_delivery_date, status
     });
     
-    const result = await db.query(
-      `INSERT INTO bills 
-      (bill_type, customer_name, customer_nic, customer_address, 
-      model_name, motor_number, chassis_number, bike_price, 
-      down_payment, bill_date, total_amount, balance_amount, 
-      estimated_delivery_date, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-      RETURNING *`,
-      [
-        normalized_bill_type, 
-        customer_name, 
-        customer_nic, 
-        customer_address, 
-        model_name, 
-        motor_number || 'N/A', 
-        chassis_number || 'N/A', 
-        safe_bike_price, 
-        down_payment, 
-        today,
-        total_amount,
-        balance_amount,
-        estimated_delivery_date,
-        status
-      ]
-    );
+    const newBill = {
+      bill_type: normalized_bill_type,
+      customer_name,
+      customer_nic,
+      customer_address,
+      model_name,
+      motor_number: motor_number || 'N/A',
+      chassis_number: chassis_number || 'N/A',
+      bike_price: safe_bike_price,
+      down_payment,
+      bill_date: today,
+      total_amount,
+      balance_amount,
+      estimated_delivery_date: estimated_delivery_date ? new Date(estimated_delivery_date) : null,
+      status
+    };
     
-    console.log('Bill created successfully:', result.rows[0]);
-    return res.status(201).json(result.rows[0]);
+    const result = await db.collection('bills').insertOne(newBill);
+    
+    const createdBill = {
+      ...newBill,
+      _id: result.insertedId
+    };
+    
+    console.log('Bill created successfully:', createdBill);
+    return res.status(201).json(createdBill);
   } catch (error) {
     console.error('Error creating bill:', error.message);
     console.error('Stack trace:', error.stack);
@@ -320,7 +346,7 @@ router.post('/', async (req, res) => {
 });
 
 // Convert advancement bill to final bill
-router.post('/:id/convert', async (req, res) => {
+router.post('/:id/convert', validateObjectId(), async (req, res) => {
   try {
     const { id } = req.params
     const { bill_type, down_payment, total_amount } = req.body
@@ -333,13 +359,11 @@ router.post('/:id/convert', async (req, res) => {
     const db = getDatabase()
     
     // Get the original bill
-    const originalBillResult = await db.query('SELECT * FROM bills WHERE id = $1', [id])
+    const originalBill = await db.collection('bills').findOne({ _id: new ObjectId(id) })
     
-    if (originalBillResult.rows.length === 0) {
+    if (!originalBill) {
       return res.status(404).json({ error: 'Bill not found' })
     }
-    
-    const originalBill = originalBillResult.rows[0]
     
     // Check if it's an advancement bill and not already converted
     // Note: Support both 'advancement' and 'advance' for the bill_type
@@ -347,119 +371,143 @@ router.post('/:id/convert', async (req, res) => {
       return res.status(400).json({ error: 'Only pending advancement bills can be converted' })
     }
     
-    const today = new Date().toISOString().split('T')[0]
+    const today = new Date();
     
     // Create a new bill based on the original
-    const newBillResult = await db.query(
-      `INSERT INTO bills 
-      (bill_type, customer_name, customer_nic, customer_address, 
-      model_name, motor_number, chassis_number, bike_price, 
-      down_payment, bill_date, total_amount, original_bill_id, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING *`,
-      [
-        bill_type, 
-        originalBill.customer_name, 
-        originalBill.customer_nic, 
-        originalBill.customer_address, 
-        originalBill.model_name, 
-        originalBill.motor_number, 
-        originalBill.chassis_number, 
-        originalBill.bike_price, 
-        down_payment || originalBill.down_payment, 
-        today,
-        total_amount || originalBill.total_amount,
-        originalBill.id,
-        'completed'
-      ]
-    )
+    const newBill = {
+      bill_type,
+      customer_name: originalBill.customer_name,
+      customer_nic: originalBill.customer_nic,
+      customer_address: originalBill.customer_address,
+      model_name: originalBill.model_name,
+      motor_number: originalBill.motor_number,
+      chassis_number: originalBill.chassis_number,
+      bike_price: originalBill.bike_price,
+      down_payment: down_payment || originalBill.down_payment,
+      bill_date: today,
+      total_amount: total_amount || originalBill.total_amount,
+      original_bill_id: originalBill._id.toString(),
+      status: 'completed'
+    };
     
-    // Mark the original bill as converted
-    await db.query(
-      'UPDATE bills SET status = $1 WHERE id = $2',
-      ['converted', originalBill.id]
-    )
+    const result = await db.collection('bills').insertOne(newBill);
     
-    res.status(201).json(newBillResult.rows[0])
+    // Update the original bill status to converted
+    await db.collection('bills').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status: 'converted' } }
+    );
+    
+    const createdBill = {
+      ...newBill,
+      _id: result.insertedId
+    };
+    
+    res.status(201).json(createdBill);
   } catch (error) {
-    console.error('Error converting bill:', error)
-    res.status(500).json({ error: 'Internal server error' })
+    console.error('Error converting bill:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 })
 
 // Generate bill document (DOCX)
-router.get('/:id/generate', async (req, res) => {
+router.get('/:id/generate', validateObjectId(), async (req, res) => {
   try {
-    const db = getDatabase()
-    const bill = await db.get('SELECT * FROM bills WHERE id = ?', [req.params.id])
+    const { id } = req.params;
+    
+    const db = getDatabase();
+    const bill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
+    
     if (!bill) {
-      return res.status(404).json({ error: 'Bill not found' })
+      return res.status(404).json({ error: 'Bill not found' });
     }
     
-    const items = await db.all('SELECT * FROM bill_items WHERE bill_id = ?', [req.params.id])
-    bill.items = items
+    const items = await db.collection('bill_items').find({ bill_id: id }).toArray();
+    bill.items = items;
     
     // Use the PDFGenerator to generate the document
-    const docxBuffer = await pdfGenerator.generateBill(bill, 'docx')
+    const docxBuffer = await pdfGenerator.generateBill(bill, 'docx');
     
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill.id}.docx`)
-    res.send(docxBuffer)
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename=bill-${bill._id}.docx`);
+    res.send(docxBuffer);
   } catch (error) {
     console.error('Error generating DOCX:', error);
-    res.status(500).json({ error: error.message })
+    res.status(500).json({ error: error.message });
   }
-})
+});
 
 // Generate PDF for a bill
-router.get('/:id/pdf', async (req, res) => {
+router.get('/:id/pdf', validateObjectId(), async (req, res) => {
   try {
     const { id } = req.params;
     const { preview, formData } = req.query;
 
     // 🚨 EMERGENCY DIRECT HANDLING FOR SPECIFIC BILL IDs
-    if (id === '77' || id === '78') {
+    // Note: Special handling for legacy IDs 77 and 78
+    if (id === '77' || id === '78' || id === 77 || id === 78) {
       console.log(`🚨 EMERGENCY: Direct handling for Bill #${id}`);
       const db = getDatabase();
-      let bill = null;
       
-      // Get bill from database
-      const result = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Bill not found' });
+      // Get bill from database - try legacy ID first
+      let emergencyBill;
+      
+      try {
+        // First try with the original numeric ID for backward compatibility
+        emergencyBill = await db.collection('bills').findOne({ legacy_id: parseInt(id) });
+        
+        // If not found with legacy_id, try with ObjectId if it's valid
+        if (!emergencyBill && ObjectId.isValid(id)) {
+          emergencyBill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
+        }
+        
+        if (!emergencyBill) {
+          return res.status(404).json({ error: 'Emergency bill not found' });
+        }
+      } catch (findError) {
+        console.error(`Error finding emergency bill #${id}:`, findError);
+        return res.status(500).json({ error: 'Error retrieving emergency bill' });
       }
-      bill = result.rows[0];
       
       // FORCE the correct values for this bill
-      bill.is_ebicycle = true;
-      bill.model_name = bill.model_name || "TMR-COLA5"; // Preserve original model name if possible
-      bill.bike_price = parseFloat(bill.bike_price) || 249500;
-      bill.total_amount = bill.bike_price; // Force total = bike price
+      emergencyBill.is_ebicycle = true;
+      emergencyBill.model_name = emergencyBill.model_name || "TMR-COLA5"; // Preserve original model name if possible
+      emergencyBill.bike_price = parseFloat(emergencyBill.bike_price) || 249500;
+      emergencyBill.total_amount = emergencyBill.bike_price; // Force total = bike price
       
       // Try to update the database record as well
       try {
-        await db.query(
-          'UPDATE bills SET total_amount = $1 WHERE id = $2',
-          [bill.bike_price, id]
+        await db.collection('bills').updateOne(
+          { _id: emergencyBill._id },
+          { $set: { 
+            total_amount: emergencyBill.bike_price,
+            is_ebicycle: true,
+            updated_at: new Date()
+          }}
         );
-        console.log(`🚨 Successfully updated Bill #${id} in database to have total_amount = ${bill.bike_price}`);
+        console.log(`🚨 Successfully updated Bill #${id} in database to have total_amount = ${emergencyBill.bike_price}`);
       } catch (error) {
         console.error(`🚨 Failed to update bill #${id} in database:`, error);
       }
       
       // Generate the PDF with our forced values
-      const pdfBuffer = await pdfGenerator.createEmergencyPdfForCola(bill);
-      
-      // Set response headers for proper PDF handling
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Length', pdfBuffer.length);
-      res.setHeader('Content-Disposition', preview === 'true' ? 'inline' : `attachment; filename="bill-${bill.id}.pdf"`);
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      
-      // Send the PDF buffer directly
-      return res.end(pdfBuffer);
+      try {
+        const pdfBuffer = await pdfGenerator.createEmergencyPdfForCola(emergencyBill);
+        
+        // Set response headers for proper PDF handling
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Length', pdfBuffer.length);
+        res.setHeader('Content-Disposition', preview === 'true' ? 'inline' : `attachment; filename="bill-${emergencyBill._id}.pdf"`);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        // Send the PDF buffer directly
+        return res.end(pdfBuffer);
+      } catch (pdfError) {
+        console.error(`Error generating emergency PDF for bill #${id}:`, pdfError);
+        return res.status(500).json({ error: 'Failed to generate emergency PDF' });
+      }
     }
 
     let bill;
@@ -467,18 +515,22 @@ router.get('/:id/pdf', async (req, res) => {
       // Use the current form data for preview
       const parsedFormData = JSON.parse(formData);
       bill = {
-        id: 'PREVIEW',
+        _id: 'PREVIEW',
         ...parsedFormData,
         bill_date: new Date().toISOString()
       };
     } else {
-      // Get bill from database
+      // Get the bill from the database
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).json({ error: 'Invalid bill ID' });
+      }
+      
       const db = getDatabase();
-      const result = await db.query('SELECT * FROM bills WHERE id = $1', [id]);
-      if (result.rows.length === 0) {
+      bill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
+      
+      if (!bill) {
         return res.status(404).json({ error: 'Bill not found' });
       }
-      bill = result.rows[0];
     }
 
     const pdfBuffer = await pdfGenerator.generateBill(bill);
@@ -486,7 +538,7 @@ router.get('/:id/pdf', async (req, res) => {
     // Set response headers for proper PDF handling
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Length', pdfBuffer.length);
-    res.setHeader('Content-Disposition', preview === 'true' ? 'inline' : `attachment; filename="bill-${bill.id}.pdf"`);
+    res.setHeader('Content-Disposition', preview === 'true' ? 'inline' : `attachment; filename="bill-${bill._id}.pdf"`);
     res.setHeader('Cache-Control', 'no-cache');
     
     // Send the PDF buffer directly
@@ -502,7 +554,7 @@ router.get('/preview', async (req, res) => {
   try {
     // Create a sample bill for preview
     const sampleBill = {
-      id: 'PREVIEW',
+      _id: 'PREVIEW',
       bill_type: 'cash',
       customer_name: 'John Doe',
       customer_nic: '123456789V',
@@ -513,7 +565,7 @@ router.get('/preview', async (req, res) => {
       bike_price: 499500.00,
       down_payment: 0,
       total_amount: 514500.00,
-      bill_date: new Date().toISOString()
+      bill_date: new Date()
     }
     
     const pdfBytes = await pdfGenerator.generateBill(sampleBill)
@@ -537,7 +589,7 @@ router.get('/preview/pdf', async (req, res) => {
 
     const parsedFormData = JSON.parse(formData);
     const bill = {
-      id: 'PREVIEW',
+      _id: 'PREVIEW',
       ...parsedFormData,
       bill_date: new Date().toISOString()
     };
@@ -559,44 +611,69 @@ router.get('/preview/pdf', async (req, res) => {
 });
 
 // Update bill
-router.put('/:id', async (req, res) => {
+router.put('/:id', validateObjectId(), async (req, res) => {
   try {
-    const db = getDatabase()
-    res.json({ message: 'Update bill endpoint' });
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
-})
-
-// Update a bill's status
-router.patch('/:id', async (req, res) => {
-  try {
-    const { status } = req.body;
+    const { id } = req.params;
+    
     const db = getDatabase();
-    const result = await db.query(
-      'UPDATE bills SET status = $1 WHERE id = $2 RETURNING *',
-      [status, req.params.id]
+    const result = await db.collection('bills').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: req.body }
     );
-    if (result.rows.length === 0) {
+    
+    if (result.matchedCount === 0) {
       return res.status(404).json({ error: 'Bill not found' });
     }
-    res.json(result.rows[0]);
+    
+    const updatedBill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
+    res.json(updatedBill);
+  } catch (error) {
+    console.error('Error updating bill:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a bill's status
+router.patch('/:id', validateObjectId(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    const db = getDatabase();
+    const result = await db.collection('bills').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status, updated_at: new Date() } }
+    );
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+    
+    const updatedBill = await db.collection('bills').findOne({ _id: new ObjectId(id) });
+    res.json(updatedBill);
   } catch (error) {
     console.error('Error updating bill:', error);
     res.status(500).json({ error: 'Failed to update bill' });
   }
-})
+});
 
 // Delete bill
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', validateObjectId(), async (req, res) => {
   try {
+    const { id } = req.params;
+    
     const db = getDatabase();
-    await db.query('DELETE FROM bills WHERE id = $1', [req.params.id]);
+    const result = await db.collection('bills').deleteOne({ _id: new ObjectId(id) });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Bill not found' });
+    }
+    
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting bill:', error);
     res.status(500).json({ error: 'Failed to delete bill' });
   }
-})
+});
 
 export default router 
