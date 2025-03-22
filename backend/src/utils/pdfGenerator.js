@@ -16,6 +16,11 @@ const COLOR_WHITE = rgb(1, 1, 1);
 const COLOR_GRAY_LIGHT = rgb(0.95, 0.95, 0.95);
 const COLOR_GRAY = rgb(0.8, 0.8, 0.8);
 
+// Inline logo as base64 (simple TMR logo)
+const INLINE_LOGO_BASE64 = `
+data:image/png;base64,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
+`;
+
 export class PDFGenerator {
     constructor() {
         this.fontManager = fontManager
@@ -133,14 +138,42 @@ export class PDFGenerator {
             // Company information (left side)
             const companyY = startY - 60;
             
-            // Draw company name - no logo attempt for now
-            page.drawText(COMPANY_INFO.name, {
-                x: this.margin,
-                y: companyY,
-                size: 14,
-                font: boldFont,
-                color: COLOR_BLACK
-            });
+            // Try to add logo from base64
+            try {
+                // Extract the base64 data (removing the data:image/png;base64, prefix)
+                const base64Data = INLINE_LOGO_BASE64.trim().split(',')[1];
+                const logoBytes = Buffer.from(base64Data, 'base64');
+                
+                // Embed the logo
+                const logoImage = await pdfDoc.embedPng(logoBytes);
+                
+                // Draw the logo on the left
+                page.drawImage(logoImage, {
+                    x: this.margin,
+                    y: companyY - 35,
+                    width: 40,
+                    height: 40,
+                });
+                
+                // Company name next to logo
+                page.drawText(COMPANY_INFO.name, {
+                    x: this.margin + 50,
+                    y: companyY,
+                    size: 14,
+                    font: boldFont,
+                    color: COLOR_BLACK
+                });
+            } catch (logoError) {
+                console.error("Error embedding logo:", logoError);
+                // Fallback to text-only header
+                page.drawText(COMPANY_INFO.name, {
+                    x: this.margin,
+                    y: companyY,
+                    size: 14,
+                    font: boldFont,
+                    color: COLOR_BLACK
+                });
+            }
             
             // Company address and dealer info
             page.drawText(COMPANY_INFO.address, {
