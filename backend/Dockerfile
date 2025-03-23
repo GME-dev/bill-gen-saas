@@ -1,58 +1,40 @@
-FROM node:18-alpine AS builder
-
-# Set working directory
+FROM node:18-alpine AS base
 WORKDIR /app
 
-# Install build dependencies
-RUN apk add --no-cache python3 make g++
-
-# Copy package files for better caching
-COPY package*.json ./
-
-# Install all dependencies (including dev dependencies)
+# Install dependencies only when needed
+FROM base AS deps
+COPY package.json package-lock.json* ./
 RUN npm ci
 
-# Copy source files
-COPY tsconfig.json ./
-COPY src/ ./src/
+# Rebuild the source code only when needed
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 
-# Create needed directories
-RUN mkdir -p dist logs assets/fonts
-
-# Build TypeScript code
+# Next, build the application
 RUN npm run build
 
-# Create a lighter production image
-FROM node:18-alpine
-
-# Set working directory
+# Production image, copy all the files and run
+FROM base AS runner
 WORKDIR /app
 
-# Install production dependencies only
-COPY package*.json ./
-RUN npm ci --only=production
+ENV NODE_ENV=production
 
-# Copy built TypeScript code
+# Run as non-root user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 expressjs
+
+# Copy necessary files
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
 
-# Copy needed assets
-COPY assets/ ./assets/
-COPY templates/ ./templates/
+# Set proper permissions
+USER expressjs
 
-# Create a directory for logs
-RUN mkdir -p logs
-
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=8080
-
-# Expose the port
+# Expose the port the app will run on
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
 # Start the application
-CMD ["node", "dist/index.js"] 
+CMD ["npm", "start"] 

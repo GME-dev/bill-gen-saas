@@ -1,6 +1,6 @@
 import winston from 'winston';
 
-// Define log levels and colors
+// Define your severity levels
 const levels = {
   error: 0,
   warn: 1,
@@ -9,7 +9,7 @@ const levels = {
   debug: 4,
 };
 
-// Define colors for each level
+// Define colors for each log level
 const colors = {
   error: 'red',
   warn: 'yellow',
@@ -18,46 +18,54 @@ const colors = {
   debug: 'blue',
 };
 
-// Add colors to winston
+// Tell winston that you want to link the colors
 winston.addColors(colors);
 
-// Define the format for the logs
+// Create the format for the logs
 const format = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.colorize({ all: true }),
   winston.format.printf(
-    (info) => `${info.timestamp} ${info.level}: ${info.message}`,
+    (info: any) => `${info.timestamp} ${info.level}: ${info.message}`,
   ),
 );
 
-// Define the transports
+// Define which transports the logger must use
 const transports = [
-  // Console transport for all logs
-  new winston.transports.Console(),
-  
-  // File transport for errors
+  // Log to the console
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize({ all: true }),
+      format
+    ),
+  }),
+  // Log to a file
   new winston.transports.File({
     filename: 'logs/error.log',
     level: 'error',
+    format,
   }),
-  
-  // File transport for all logs
-  new winston.transports.File({ filename: 'logs/all.log' }),
+  // Log all levels to another file
+  new winston.transports.File({ 
+    filename: 'logs/all.log',
+    format,
+  }),
 ];
+
+// Get the log level from environment or use default
+const level = process.env.LOG_LEVEL || 'info';
 
 // Create the logger
 export const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
+  level,
   levels,
-  format,
   transports,
 });
 
-// Export a simplified logger object that matches the console API
+// Export a simplified interface
 export default {
-  error: (message: string, ...meta: any[]) => logger.error(message, ...meta),
-  warn: (message: string, ...meta: any[]) => logger.warn(message, ...meta),
-  info: (message: string, ...meta: any[]) => logger.info(message, ...meta),
-  http: (message: string, ...meta: any[]) => logger.http(message, ...meta),
-  debug: (message: string, ...meta: any[]) => logger.debug(message, ...meta),
+  error: (message: string): void => logger.error(message),
+  warn: (message: string): void => logger.warn(message),
+  info: (message: string): void => logger.info(message),
+  http: (message: string): void => logger.http(message),
+  debug: (message: string): void => logger.debug(message),
 }; 
