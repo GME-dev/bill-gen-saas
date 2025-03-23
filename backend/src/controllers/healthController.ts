@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import os from 'os';
+import logger from '../utils/logger.js';
 
 /**
  * Basic health check controller
@@ -20,7 +21,7 @@ export const basicHealth = (req: Request, res: Response): void => {
 export const detailedHealth = async (req: Request, res: Response): Promise<void> => {
   try {
     const dbState = mongoose.connection.readyState;
-    const dbStatus = {
+    const dbStatusMap: Record<number, string> = {
       0: 'disconnected',
       1: 'connected',
       2: 'connecting',
@@ -43,13 +44,14 @@ export const detailedHealth = async (req: Request, res: Response): Promise<void>
         memoryFree: os.freemem()
       },
       database: {
-        status: dbStatus[dbState] || 'unknown',
+        status: dbStatusMap[dbState] || 'unknown',
         connected: dbState === 1
       }
     };
 
     res.status(200).json(healthInfo);
   } catch (error) {
+    logger.error(`Health check error: ${(error as Error).message}`);
     res.status(500).json({ 
       status: 'error', 
       message: (error as Error).message 

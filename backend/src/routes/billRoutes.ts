@@ -1,5 +1,7 @@
 import express, { Request, Response } from 'express';
+import { ObjectId } from 'mongodb';
 import Bill from '../models/Bill.js';
+import { connectToDatabase } from '../config/database.js';
 import { generatePDF } from '../services/pdfService.js';
 
 const router = express.Router();

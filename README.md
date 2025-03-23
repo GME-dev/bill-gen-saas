@@ -1,124 +1,147 @@
-# Bill Generation System
+# TMR Motorcycle Bill Generator
 
-A comprehensive bill generation system for motorcycle sales, supporting both cash and leasing transactions.
+This is a SaaS application for generating motorcycle service bills for TMR Motorcycle Services.
 
 ## Features
 
-### Bill Types
-1. **Cash Bills**
-   - Available for all bike models
-   - Regular bikes: Total = Bike Price + RMV (13,000)
-   - E-bicycles: Total = Bike Price (final price)
+- Generate and manage motorcycle service bills
+- Track customer information
+- Maintain a database of bike models
+- Generate PDF invoices
+- Track payment status
 
-2. **Leasing Bills**
-   - Not available for e-bicycles
-   - Shows: Bike Price, RMV as CPZ (13,500), Down Payment
-   - Total Amount = Down Payment
+## Project Structure
 
-3. **Advance Payment Bills**
-   - For Cash Advance:
-     * Shows: Bike Price, RMV, Advance Amount
-     * Balance = Total Price - Advance Amount
-   - For Leasing Advance:
-     * Shows: Bike Price, CPZ, Down Payment, Advance Amount
-     * Balance = Down Payment - Advance Amount
+The project consists of two main parts:
 
-### Bike Types
-1. **E-Bicycles**
-   - Models: TMR-COLA5, TMR-X01
-   - No RMV charges
-   - Cash sales only
-   - Price in system is final price
+- **Frontend**: React application (NextJS)
+- **Backend**: NodeJS API (Express + MongoDB)
 
-2. **Regular Bikes**
-   - All other models
-   - RMV charges apply
-   - Available for both cash and leasing
+## Development
 
-## Tech Stack
+### Prerequisites
 
-- Frontend: React with Ant Design
-- Backend: Express.js
-- Database: MongoDB Atlas
-- Deployment: Cloudflare Pages (Frontend) and Railway (Backend)
+- Node.js v18 or higher
+- Docker and Docker Compose
+- MongoDB (local or via Docker)
 
-## Setup
+### Setup
 
 1. Clone the repository:
-   ```bash
-   git clone [repository-url]
+   ```
+   git clone https://github.com/yourusername/bill-gen-saas.git
    cd bill-gen-saas
    ```
 
 2. Install dependencies:
-   ```bash
-   # Install frontend dependencies
-   cd frontend
+   ```
    npm install
-   
-   # Install backend dependencies
-   cd ../backend
-   npm install
+   cd frontend && npm install
+   cd ../backend && npm install
    ```
 
-3. Create environment files:
-   - Frontend `.env`:
-     ```env
-     VITE_API_URL=your_backend_api_url
-     ```
-   - Backend `.env`:
-     ```env
-     MONGODB_URI=your_mongodb_atlas_connection_string
-     MONGODB_DB_NAME=bill-gen
-     CORS_ORIGIN=your_frontend_url
-     ```
+3. Set up environment variables:
+   - Create a `.env` file in the `backend` directory based on `.env.example`
+   - Create a `.env.local` file in the `frontend` directory based on `.env.example`
 
-4. Set up the database:
-   - Run the migration script to initialize MongoDB collections:
-     ```bash
-     cd backend
-     node scripts/migrate-to-mongodb.js
-     ```
+4. Start the development servers:
 
-5. Start development servers:
-   ```bash
-   # Start backend
+   For the backend:
+   ```
    cd backend
+   docker-compose up -d  # Starts MongoDB
    npm run dev
-   
-   # Start frontend (in a separate terminal)
+   ```
+
+   For the frontend:
+   ```
    cd frontend
    npm run dev
    ```
 
-## Database Schema
+5. Access the application:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8080
 
-### bike_models (MongoDB Collection)
-- `_id`: ObjectId (Primary Key)
-- `name`: String (Unique)
-- `price`: Number
-- `is_ebicycle`: Boolean
-- `can_be_leased`: Boolean
-- `created_at`: Date
-- `updated_at`: Date
+## Docker Setup
 
-### bills (MongoDB Collection)
-- `_id`: ObjectId (Primary Key)
-- `bill_number`: String (Unique)
-- `bill_type`: String ('cash' or 'leasing')
-- `customer_name`: String
-- `customer_nic`: String
-- `customer_address`: String
-- `model_name`: String (References bike_models.name)
-- Various amount fields and status tracking
+To run the entire application using Docker:
 
-## Contributing
+1. Make sure Docker and Docker Compose are installed and running
+2. Run:
+   ```
+   docker-compose up -d
+   ```
+3. The application will be available at:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8080
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+## Deployment
+
+The application can be deployed using Docker and the provided GitHub Actions workflows.
+
+### Prerequisites for deployment:
+
+1. Set up the following GitHub secrets:
+   - `DOCKER_TOKEN`: Docker Hub access token
+   - `SSH_PRIVATE_KEY`: Private key for SSH deployment
+
+2. Set up the following GitHub variables:
+   - `DOCKER_USERNAME`: Your Docker Hub username
+   - `DEPLOY_HOST`: The deployment server hostname
+   - `DEPLOY_USER`: The deployment server username
+
+The application will be automatically deployed when changes are pushed to the main branch.
+
+## GitHub Workflow
+
+This project uses GitHub Actions for CI/CD. The workflow includes:
+
+1. **Testing**: Runs tests and linting for both frontend and backend
+2. **Building**: Builds Docker images for both frontend and backend
+3. **Deployment**: Deploys the application to the production server
+
+The workflow is defined in `.github/workflows/ci-cd.yml`.
+
+### Setting up GitHub Actions
+
+1. Go to your GitHub repository settings
+2. Navigate to "Secrets and variables" → "Actions"
+3. Add the required secrets and variables as listed in the Deployment prerequisites
+
+### Manual Deployment
+
+If you need to deploy manually:
+
+1. Build the Docker images:
+   ```
+   cd backend
+   docker build -t yourusername/bill-gen-saas-backend:latest .
+   
+   cd ../frontend
+   docker build -t yourusername/bill-gen-saas-frontend:latest .
+   ```
+
+2. Push the images to Docker Hub:
+   ```
+   docker push yourusername/bill-gen-saas-backend:latest
+   docker push yourusername/bill-gen-saas-frontend:latest
+   ```
+
+3. SSH into your server and update the containers:
+   ```
+   cd /opt/bill-gen-saas
+   docker compose pull
+   docker compose up -d
+   ```
+
+## API Documentation
+
+API endpoints are available at `/api` with the following routes:
+
+- `/api/health`: Health check endpoints
+- `/api/bills`: Bill management endpoints
+- `/api/bike-models`: Bike model management endpoints
 
 ## License
 

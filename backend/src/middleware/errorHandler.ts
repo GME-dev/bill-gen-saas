@@ -4,6 +4,7 @@ import logger from '../utils/logger.js';
 interface ApiError extends Error {
   statusCode?: number;
   isOperational?: boolean;
+  code?: number;
 }
 
 /**
@@ -44,7 +45,7 @@ export const errorHandler = (err: ApiError, req: Request, res: Response, next: N
   const statusCode = err.statusCode || 500;
 
   // MongoDB duplicate key error
-  if (err.name === 'MongoError' && (err as any).code === 11000) {
+  if (err.name === 'MongoError' && err.code === 11000) {
     return res.status(400).json({
       status: 'error',
       message: 'Duplicate key error',
