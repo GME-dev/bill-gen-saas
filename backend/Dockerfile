@@ -22,7 +22,7 @@ RUN printf 'const logger = {\n\
 \n\
 module.exports = logger;' > src/utils/logger.js
 
-# Create pdfService.js for PDF generation
+# Create pdfService.js for PDF generation - split into multiple commands
 RUN printf 'const PDFDocument = require("pdfkit");\n\
 const fs = require("fs-extra");\n\
 const path = require("path");\n\
@@ -50,8 +50,10 @@ exports.generatePDF = async (bill) => {\n\
       });\n\
       \n\
       // Add a border to the page\n\
-      doc.rect(15, 15, doc.page.width - 30, doc.page.height - 30).stroke();\n\
-      \n\
+      doc.rect(15, 15, doc.page.width - 30, doc.page.height - 30).stroke();\n' > src/services/pdfService.js
+
+# PDF Part 2 - Header and information
+RUN printf '\n\
       // Add content to PDF with improved styling\n\
       // Header\n\
       doc.fontSize(22).font("Helvetica-Bold").text("GUNAWARDHANA MOTORS", { align: "center" });\n\
@@ -73,8 +75,10 @@ exports.generatePDF = async (bill) => {\n\
       \n\
       // Left column - Date information\n\
       doc.font("Helvetica-Bold").fontSize(12).text("Date:", 50, startY);\n\
-      doc.font("Helvetica").text(new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString(), 120, startY);\n\
-      \n\
+      doc.font("Helvetica").text(new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString(), 120, startY);\n' >> src/services/pdfService.js
+
+# PDF Part 3 - Status and customer section
+RUN printf '\n\
       // Right column - Invoice status\n\
       let paymentStatus = "Unpaid";\n\
       if (bill.isPaid || bill.paid || bill.status === "paid") {\n\
@@ -105,8 +109,10 @@ exports.generatePDF = async (bill) => {\n\
       doc.font("Helvetica").text(bill.customerName || bill.customer_name || "N/A", 150, customerY);\n\
       \n\
       doc.font("Helvetica-Bold").text("Phone:", 50, customerY + 20);\n\
-      doc.font("Helvetica").text(bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A", 150, customerY + 20);\n\
-      \n\
+      doc.font("Helvetica").text(bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A", 150, customerY + 20);\n' >> src/services/pdfService.js
+
+# PDF Part 4 - More customer info and bike info section
+RUN printf '\n\
       if (bill.customer_nic) {\n\
         doc.font("Helvetica-Bold").text("NIC:", 50, customerY + 40);\n\
         doc.font("Helvetica").text(bill.customer_nic, 150, customerY + 40);\n\
@@ -133,8 +139,10 @@ exports.generatePDF = async (bill) => {\n\
         doc.font("Helvetica").text(bill.bikeInfo.regNumber || "N/A", 150, bikeY + 20);\n\
       } else if (bill.model_name) {\n\
         doc.font("Helvetica-Bold").fontSize(12).text("Model:", 50, bikeY);\n\
-        doc.font("Helvetica").text(bill.model_name || "N/A", 150, bikeY);\n\
-        \n\
+        doc.font("Helvetica").text(bill.model_name || "N/A", 150, bikeY);\n' >> src/services/pdfService.js
+
+# PDF Part 5 - Bike details continued and invoice items
+RUN printf '\n\
         let offset = 0;\n\
         if (bill.chassis_number) {\n\
           doc.font("Helvetica-Bold").text("Chassis No:", 50, bikeY + 20);\n\
@@ -163,8 +171,10 @@ exports.generatePDF = async (bill) => {\n\
       doc.text("Description", 60, tableTop + 5);\n\
       doc.text("Qty", 280, tableTop + 5, { width: 40, align: "center" });\n\
       doc.text("Rate", 330, tableTop + 5, { width: 70, align: "right" });\n\
-      doc.text("Amount", 430, tableTop + 5, { width: 70, align: "right" });\n\
-      \n\
+      doc.text("Amount", 430, tableTop + 5, { width: 70, align: "right" });\n' >> src/services/pdfService.js
+
+# PDF Part 6 - Items table 
+RUN printf '\n\
       // Items rows\n\
       let itemY = tableTop + 25;\n\
       \n\
@@ -194,8 +204,10 @@ exports.generatePDF = async (bill) => {\n\
         doc.text("1", 280, itemY, { width: 40, align: "center" });\n\
         doc.text("", 330, itemY, { width: 70, align: "right" });\n\
         doc.text(safeToString(bill.total || bill.amount || 0), 430, itemY, { width: 70, align: "right" });\n\
-      }\n\
-      \n\
+      }\n' >> src/services/pdfService.js
+
+# PDF Part 7 - Totals section
+RUN printf '\n\
       // Add bottom border to table\n\
       doc.moveTo(50, doc.y + 10).lineTo(doc.page.width - 50, doc.y + 10).stroke();\n\
       \n\
@@ -216,8 +228,10 @@ exports.generatePDF = async (bill) => {\n\
       doc.fillColor("black");\n\
       doc.font("Helvetica-Bold").fontSize(12);\n\
       doc.text("Total:", 330, totalsStartY + 45, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 430, totalsStartY + 45, { width: 70, align: "right" });\n\
-      \n\
+      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 430, totalsStartY + 45, { width: 70, align: "right" });\n' >> src/services/pdfService.js
+
+# PDF Part 8 - Footer and finalization
+RUN printf '\n\
       // Payment details\n\
       doc.moveDown(3);\n\
       if (bill.paymentMethod || bill.bill_type) {\n\
@@ -247,7 +261,7 @@ exports.generatePDF = async (bill) => {\n\
       reject(error);\n\
     }\n\
   });\n\
-};' > src/services/pdfService.js
+};' >> src/services/pdfService.js
 
 # Create BikeModel.js
 RUN printf 'const mongoose = require("mongoose");\n\
