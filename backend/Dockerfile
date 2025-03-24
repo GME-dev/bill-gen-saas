@@ -28,6 +28,12 @@ const fs = require("fs-extra");\n\
 const path = require("path");\n\
 const logger = require("../utils/logger");\n\
 \n\
+// Helper function to safely convert to string\n\
+const safeToString = (val) => {\n\
+  if (val === undefined || val === null) return "";\n\
+  return val.toString();\n\
+};\n\
+\n\
 // Function to generate PDF from bill data\n\
 exports.generatePDF = async (bill) => {\n\
   return new Promise((resolve, reject) => {\n\
@@ -48,19 +54,26 @@ exports.generatePDF = async (bill) => {\n\
       doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });\n\
       doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });\n\
       doc.moveDown();\n\
-      doc.fontSize(16).text(`Invoice: ${bill.billNumber}`, { align: "center" });\n\
+      doc.fontSize(16).text(`Invoice: ${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });\n\
       doc.moveDown();\n\
       \n\
       // Customer Information\n\
-      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate).toLocaleDateString()}`);\n\
-      doc.text(`Customer: ${bill.customerName}`);\n\
-      doc.text(`Phone: ${bill.customerPhone}`);\n\
+      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString()}`);\n\
+      doc.text(`Customer: ${bill.customerName || bill.customer_name || "N/A"}`);\n\
+      doc.text(`Phone: ${bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A"}`);\n\
+      if (bill.customer_address) {\n\
+        doc.text(`Address: ${bill.customer_address}`);\n\
+      }\n\
       doc.moveDown();\n\
       \n\
       // Bike Information\n\
       if (bill.bikeInfo) {\n\
-        doc.text(`Bike: ${bill.bikeInfo.make} ${bill.bikeInfo.model}`);\n\
-        doc.text(`Registration Number: ${bill.bikeInfo.regNumber}`);\n\
+        doc.text(`Bike: ${bill.bikeInfo.make || "N/A"} ${bill.bikeInfo.model || "N/A"}`);\n\
+        doc.text(`Registration Number: ${bill.bikeInfo.regNumber || "N/A"}`);\n\
+      } else if (bill.model_name) {\n\
+        doc.text(`Bike Model: ${bill.model_name || "N/A"}`);\n\
+        if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);\n\
+        if (bill.engine_number) doc.text(`Engine Number: ${bill.engine_number}`);\n\
       }\n\
       doc.moveDown();\n\
       \n\
@@ -79,15 +92,18 @@ exports.generatePDF = async (bill) => {\n\
       \n\
       if (bill.items && bill.items.length > 0) {\n\
         bill.items.forEach(item => {\n\
-          doc.text(item.description, 50, itemY);\n\
-          doc.text(item.quantity.toString(), 280, itemY, { width: 40, align: "right" });\n\
-          doc.text(item.rate.toString(), 330, itemY, { width: 70, align: "right" });\n\
-          doc.text(item.amount.toString(), 430, itemY, { width: 70, align: "right" });\n\
+          doc.text(item.description || "Item", 50, itemY);\n\
+          doc.text(safeToString(item.quantity || 1), 280, itemY, { width: 40, align: "right" });\n\
+          doc.text(safeToString(item.rate || item.price || 0), 330, itemY, { width: 70, align: "right" });\n\
+          doc.text(safeToString(item.amount || item.total || 0), 430, itemY, { width: 70, align: "right" });\n\
           itemY = doc.y + 15;\n\
           doc.y = itemY;\n\
         });\n\
       } else {\n\
-        doc.text("No items", 50, itemY);\n\
+        // Handle case where there are no items or items is in a different format\n\
+        doc.text("Total Amount", 50, itemY);\n\
+        doc.text("1", 280, itemY, { width: 40, align: "right" });\n\
+        doc.text(safeToString(bill.total || bill.amount || 0), 430, itemY, { width: 70, align: "right" });\n\
       }\n\
       \n\
       doc.moveDown();\n\
@@ -95,28 +111,37 @@ exports.generatePDF = async (bill) => {\n\
       // Totals\n\
       const totalsY = doc.y + 10;\n\
       doc.text("Subtotal:", 330, totalsY, { width: 70, align: "right" });\n\
-      doc.text(bill.subtotal.toString(), 430, totalsY, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 430, totalsY, { width: 70, align: "right" });\n\
       \n\
       doc.text("Tax:", 330, totalsY + 20, { width: 70, align: "right" });\n\
-      doc.text(bill.tax.toString(), 430, totalsY + 20, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.tax || 0), 430, totalsY + 20, { width: 70, align: "right" });\n\
       \n\
       doc.font("Helvetica-Bold");\n\
       doc.text("Total:", 330, totalsY + 40, { width: 70, align: "right" });\n\
-      doc.text(bill.total.toString(), 430, totalsY + 40, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.total || bill.amount || 0), 430, totalsY + 40, { width: 70, align: "right" });\n\
       \n\
       // Payment Status\n\
       doc.moveDown(2);\n\
       doc.font("Helvetica");\n\
-      doc.text(`Payment Status: ${bill.isPaid ? "Paid" : "Unpaid"}`);\n\
-      if (bill.isPaid) {\n\
-        doc.text(`Payment Method: ${bill.paymentMethod}`);\n\
+      let paymentStatus = "Unpaid";\n\
+      if (bill.isPaid || bill.paid || bill.status === "paid") {\n\
+        paymentStatus = "Paid";\n\
+      } else if (bill.status) {\n\
+        paymentStatus = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);\n\
+      }\n\
+      doc.text(`Payment Status: ${paymentStatus}`);\n\
+      \n\
+      if (bill.isPaid || bill.paid) {\n\
+        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`);\n\
+      } else if (bill.bill_type) {\n\
+        doc.text(`Bill Type: ${bill.bill_type}`);\n\
       }\n\
       \n\
       // Notes\n\
-      if (bill.notes) {\n\
+      if (bill.notes || bill.remarks) {\n\
         doc.moveDown();\n\
         doc.text("Notes:");\n\
-        doc.text(bill.notes);\n\
+        doc.text(bill.notes || bill.remarks);\n\
       }\n\
       \n\
       // Footer\n\
@@ -190,25 +215,45 @@ const BillSchema = new mongoose.Schema({\n\
     required: true,\n\
     unique: true\n\
   },\n\
+  bill_number: String,  // Alternative field for compatibility\n\
+  bill_type: { \n\
+    type: String,\n\
+    enum: ["cash", "card", "online", "leasing", "pending"],\n\
+    default: "cash"\n\
+  },\n\
+  status: {\n\
+    type: String,\n\
+    enum: ["pending", "paid", "cancelled", "completed", "leasing"],\n\
+    default: "pending"\n\
+  },\n\
   customerName: {\n\
     type: String,\n\
     required: true\n\
   },\n\
+  customer_name: String,  // Alternative field for compatibility\n\
   customerPhone: {\n\
     type: String,\n\
     required: true\n\
   },\n\
+  customer_phone: String,  // Alternative field for compatibility\n\
+  customer_nic: String,    // Additional field for NIC\n\
+  customer_address: String, // Additional field for address\n\
   bikeInfo: BikeInfoSchema,\n\
+  model_name: String,       // For alternative bike model reference\n\
+  chassis_number: String,   // For bike identification\n\
+  engine_number: String,    // For bike identification\n\
   serviceDate: {\n\
     type: Date,\n\
     required: true,\n\
     default: Date.now\n\
   },\n\
+  date: Date,               // Alternative date field\n\
   items: [BillItemSchema],\n\
   subtotal: {\n\
     type: Number,\n\
     required: true\n\
   },\n\
+  subTotal: Number,         // Alternative subtotal field\n\
   tax: {\n\
     type: Number,\n\
     required: true,\n\
@@ -218,29 +263,46 @@ const BillSchema = new mongoose.Schema({\n\
     type: Number,\n\
     required: true\n\
   },\n\
+  amount: Number,           // Alternative total field\n\
   isPaid: {\n\
     type: Boolean,\n\
     default: false\n\
   },\n\
+  paid: Boolean,            // Alternative paid field\n\
   paymentMethod: {\n\
     type: String,\n\
-    enum: ["cash", "card", "online", "pending"],\n\
+    enum: ["cash", "card", "online", "leasing", "pending"],\n\
     default: "pending"\n\
   },\n\
   notes: {\n\
     type: String\n\
-  }\n\
+  },\n\
+  remarks: String           // Alternative notes field\n\
 }, {\n\
-  timestamps: true\n\
+  timestamps: true,\n\
+  strict: false  // Allow additional fields not in schema\n\
 });\n\
 \n\
 // Auto-generate bill number before saving\n\
 BillSchema.pre("save", async function(next) {\n\
-  if (this.isNew) {\n\
-    const count = await mongoose.model("Bill").countDocuments();\n\
-    this.billNumber = `TMR${(count + 1).toString().padStart(4, "0")}`;\n\
+  try {\n\
+    if (this.isNew && !this.billNumber && !this.bill_number) {\n\
+      const today = new Date();\n\
+      const year = today.getFullYear().toString().substr(-2);\n\
+      const month = (today.getMonth() + 1).toString().padStart(2, "0");\n\
+      \n\
+      const count = await mongoose.model("Bill").countDocuments();\n\
+      this.billNumber = `TMR-${year}-${month}-${(count + 1).toString().padStart(4, "0")}`;\n\
+      \n\
+      // Set the alternative field for compatibility\n\
+      if (!this.bill_number) {\n\
+        this.bill_number = this.billNumber;\n\
+      }\n\
+    }\n\
+    next();\n\
+  } catch (error) {\n\
+    next(error);\n\
   }\n\
-  next();\n\
 });\n\
 \n\
 module.exports = mongoose.model("Bill", BillSchema);' > src/models/Bill.js
@@ -365,8 +427,12 @@ app.get("/api/bills/:id/pdf", async (req, res) => {\n\
     \n\
     const pdfBuffer = await generatePDF(bill);\n\
     \n\
+    // Handle preview mode if requested\n\
+    const isPreview = req.query.preview === "true";\n\
+    const disposition = isPreview ? "inline" : "attachment";\n\
+    \n\
     res.setHeader("Content-Type", "application/pdf");\n\
-    res.setHeader("Content-Disposition", `attachment; filename=TMR_Bill_${bill.billNumber}.pdf`);\n\
+    res.setHeader("Content-Disposition", `${disposition}; filename=TMR_Bill_${bill.billNumber || bill.bill_number}.pdf`);\n\
     res.status(200).send(pdfBuffer);\n\
   } catch (error) {\n\
     logger.error(`Error generating PDF: ${error.message}`);\n\
@@ -376,21 +442,36 @@ app.get("/api/bills/:id/pdf", async (req, res) => {\n\
 \n\
 app.post("/api/bills", async (req, res) => {\n\
   try {\n\
-    // Calculate or validate totals\n\
-    const { items, tax } = req.body;\n\
+    let billData = req.body;\n\
     \n\
-    // Calculate subtotal\n\
-    const subtotal = items.reduce((sum, item) => sum + Number(item.amount), 0);\n\
+    // Calculate totals if items are present\n\
+    if (req.body.items && Array.isArray(req.body.items)) {\n\
+      const subtotal = req.body.items.reduce(\n\
+        (sum, item) => sum + Number(item.amount || item.total || 0), \n\
+        0\n\
+      );\n\
+      const total = subtotal + Number(req.body.tax || 0);\n\
+      \n\
+      billData = {\n\
+        ...billData,\n\
+        subtotal,\n\
+        subTotal: subtotal, // For compatibility\n\
+        total,\n\
+        amount: total // For compatibility\n\
+      };\n\
+    }\n\
     \n\
-    // Calculate total\n\
-    const total = subtotal + Number(tax || 0);\n\
-    \n\
-    // Create bill with calculated values\n\
-    const billData = {\n\
-      ...req.body,\n\
-      subtotal,\n\
-      total\n\
-    };\n\
+    // Handle field compatibility\n\
+    if (billData.customer_name && !billData.customerName) {\n\
+      billData.customerName = billData.customer_name;\n\
+    }\n\
+    if (billData.customer_phone && !billData.customerPhone) {\n\
+      billData.customerPhone = billData.customer_phone;\n\
+    }\n\
+    if (billData.bill_type === "cash" && !billData.isPaid) {\n\
+      billData.isPaid = true;\n\
+      billData.paymentMethod = "cash";\n\
+    }\n\
     \n\
     const newBill = new Bill(billData);\n\
     const savedBill = await newBill.save();\n\
@@ -404,12 +485,12 @@ app.post("/api/bills", async (req, res) => {\n\
 // Update bill\n\
 app.put("/api/bills/:id", async (req, res) => {\n\
   try {\n\
-    // Calculate or validate totals if items are updated\n\
     let updateData = req.body;\n\
     \n\
-    if (req.body.items) {\n\
+    // Calculate totals if items are updated\n\
+    if (req.body.items && Array.isArray(req.body.items)) {\n\
       const subtotal = req.body.items.reduce(\n\
-        (sum, item) => sum + Number(item.amount),\n\
+        (sum, item) => sum + Number(item.amount || item.total || 0),\n\
         0\n\
       );\n\
       const total = subtotal + Number(req.body.tax || 0);\n\
@@ -417,8 +498,18 @@ app.put("/api/bills/:id", async (req, res) => {\n\
       updateData = {\n\
         ...updateData,\n\
         subtotal,\n\
-        total\n\
+        subTotal: subtotal, // For compatibility\n\
+        total,\n\
+        amount: total // For compatibility\n\
       };\n\
+    }\n\
+    \n\
+    // Handle field compatibility\n\
+    if (updateData.customer_name && !updateData.customerName) {\n\
+      updateData.customerName = updateData.customer_name;\n\
+    }\n\
+    if (updateData.customer_phone && !updateData.customerPhone) {\n\
+      updateData.customerPhone = updateData.customer_phone;\n\
     }\n\
     \n\
     const updatedBill = await Bill.findByIdAndUpdate(\n\
@@ -434,6 +525,72 @@ app.put("/api/bills/:id", async (req, res) => {\n\
     res.status(200).json(updatedBill);\n\
   } catch (error) {\n\
     logger.error(`Error updating bill: ${error.message}`);\n\
+    res.status(400).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
+// Update bill status\n\
+app.patch("/api/bills/:id/status", async (req, res) => {\n\
+  try {\n\
+    const { status } = req.body;\n\
+    if (!status) {\n\
+      return res.status(400).json({ error: "Status is required" });\n\
+    }\n\
+    \n\
+    // Handle different status types\n\
+    let updateData = { status };\n\
+    \n\
+    if (status === "paid") {\n\
+      updateData.isPaid = true;\n\
+      updateData.paid = true;\n\
+      updateData.paymentMethod = req.body.paymentMethod || "cash";\n\
+    } else if (status === "cancelled") {\n\
+      updateData.isPaid = false;\n\
+      updateData.paid = false;\n\
+    }\n\
+    \n\
+    const updatedBill = await Bill.findByIdAndUpdate(\n\
+      req.params.id,\n\
+      updateData,\n\
+      { new: true }\n\
+    );\n\
+    \n\
+    if (!updatedBill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    \n\
+    res.status(200).json(updatedBill);\n\
+  } catch (error) {\n\
+    logger.error(`Error updating bill status: ${error.message}`);\n\
+    res.status(400).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
+// Convert bill to leasing\n\
+app.put("/api/bills/:id/convert-to-leasing", async (req, res) => {\n\
+  try {\n\
+    const updateData = {\n\
+      ...req.body,\n\
+      status: "leasing",\n\
+      bill_type: "leasing",\n\
+      paymentMethod: "leasing",\n\
+      isPaid: false,\n\
+      paid: false\n\
+    };\n\
+    \n\
+    const updatedBill = await Bill.findByIdAndUpdate(\n\
+      req.params.id,\n\
+      updateData,\n\
+      { new: true, runValidators: true }\n\
+    );\n\
+    \n\
+    if (!updatedBill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    \n\
+    res.status(200).json(updatedBill);\n\
+  } catch (error) {\n\
+    logger.error(`Error converting bill to leasing: ${error.message}`);\n\
     res.status(400).json({ error: error.message });\n\
   }\n\
 });\n\
@@ -463,8 +620,11 @@ app.patch("/api/bills/:id/pay", async (req, res) => {\n\
     const updatedBill = await Bill.findByIdAndUpdate(\n\
       req.params.id,\n\
       { \n\
-        isPaid: true, \n\
-        paymentMethod \n\
+        isPaid: true,\n\
+        paid: true,\n\
+        status: "paid",\n\
+        paymentMethod,\n\
+        bill_type: paymentMethod\n\
       },\n\
       { new: true }\n\
     );\n\
