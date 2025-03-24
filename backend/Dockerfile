@@ -22,6 +22,31 @@ RUN printf 'const logger = {\n\
 \n\
 module.exports = logger;' > src/utils/logger.js
 
+# Create database.js
+RUN printf 'const mongoose = require("mongoose");\n\
+const logger = require("./logger");\n\
+\n\
+// Connect to MongoDB\n\
+const connectToDatabase = async () => {\n\
+  try {\n\
+    const options = {\n\
+      useNewUrlParser: true,\n\
+      useUnifiedTopology: true,\n\
+    };\n\
+    \n\
+    const uri = process.env.MONGODB_URI || "mongodb://localhost:27017/bill-gen";\n\
+    await mongoose.connect(uri, options);\n\
+    \n\
+    logger.info("Connected to MongoDB successfully");\n\
+    return mongoose.connection;\n\
+  } catch (error) {\n\
+    logger.error(`Error connecting to MongoDB: ${error.message}`);\n\
+    throw error;\n\
+  }\n\
+};\n\
+\n\
+module.exports = { connectToDatabase };' > src/utils/database.js
+
 # Create simplified pdfService.js with basic functionality
 RUN printf 'const PDFDocument = require("pdfkit");\n\
 const logger = require("../utils/logger");\n\
