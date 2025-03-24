@@ -17,4 +17,4 @@ health_check_path = "/api/health"
 [variables]
 NODE_ENV = "production"
 PORT = "8080"
-CORS_ORIGIN = "https://tmr-bill-generator.pages.dev" 
+CORS_ORIGIN = "https://bill-gen-saas.pages.dev" 
