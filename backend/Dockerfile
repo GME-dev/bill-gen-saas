@@ -340,10 +340,7 @@ const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/tmr-bi
 \n\
 const connectToDatabase = async () => {\n\
   try {\n\
-    await mongoose.connect(MONGODB_URI, {\n\
-      useNewUrlParser: true,\n\
-      useUnifiedTopology: true,\n\
-    });\n\
+    await mongoose.connect(MONGODB_URI);\n\
     logger.info("Connected to MongoDB successfully");\n\
     return mongoose;\n\
   } catch (error) {\n\
