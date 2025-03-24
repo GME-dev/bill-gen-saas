@@ -33,11 +33,10 @@ RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/templates ./dist/templates
 
-# Create default environment file
-RUN echo "PORT=8080\n\
-NODE_ENV=production\n\
-MONGODB_URI=${MONGODB_URI}\n\
-CORS_ORIGIN=https://bill-gen-saas.pages.dev" > .env
+# Set default environment variables
+ENV PORT=8080 \
+    NODE_ENV=production \
+    CORS_ORIGIN=https://bill-gen-saas.pages.dev
 
 # Expose port
 EXPOSE 8080
