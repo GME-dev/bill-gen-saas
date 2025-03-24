@@ -17,4 +17,7 @@ health_check_path = "/api/health"
 [variables]
 NODE_ENV = "production"
 PORT = "8080"
-CORS_ORIGIN = "https://bill-gen-saas.pages.dev" 
+CORS_ORIGIN = "https://bill-gen-saas.pages.dev"
+DB_PATH = "./data/bills.db"
+MONGODB_DB_NAME = "bill-gen"
+TEMPLATES_DIR = "./templates" 
