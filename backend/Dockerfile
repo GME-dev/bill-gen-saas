@@ -6,10 +6,10 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install express cors helmet morgan dotenv mongoose mongodb
+RUN npm install express cors helmet morgan dotenv mongoose mongodb pdfkit fs-extra
 
 # Create directories
-RUN mkdir -p src/utils src/models templates
+RUN mkdir -p src/utils src/models src/services templates
 
 # Create logger.js
 RUN printf 'const logger = {\n\
@@ -21,6 +21,117 @@ RUN printf 'const logger = {\n\
 };\n\
 \n\
 module.exports = logger;' > src/utils/logger.js
+
+# Create pdfService.js for PDF generation
+RUN printf 'const PDFDocument = require("pdfkit");\n\
+const fs = require("fs-extra");\n\
+const path = require("path");\n\
+const logger = require("../utils/logger");\n\
+\n\
+// Function to generate PDF from bill data\n\
+exports.generatePDF = async (bill) => {\n\
+  return new Promise((resolve, reject) => {\n\
+    try {\n\
+      // Create a new PDF document\n\
+      const doc = new PDFDocument({ margin: 50 });\n\
+      \n\
+      // Create buffer to store PDF\n\
+      const buffers = [];\n\
+      doc.on("data", buffers.push.bind(buffers));\n\
+      doc.on("end", () => {\n\
+        const pdfData = Buffer.concat(buffers);\n\
+        resolve(pdfData);\n\
+      });\n\
+      \n\
+      // Add content to PDF\n\
+      // Header\n\
+      doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });\n\
+      doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });\n\
+      doc.moveDown();\n\
+      doc.fontSize(16).text(`Invoice: ${bill.billNumber}`, { align: "center" });\n\
+      doc.moveDown();\n\
+      \n\
+      // Customer Information\n\
+      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate).toLocaleDateString()}`);\n\
+      doc.text(`Customer: ${bill.customerName}`);\n\
+      doc.text(`Phone: ${bill.customerPhone}`);\n\
+      doc.moveDown();\n\
+      \n\
+      // Bike Information\n\
+      if (bill.bikeInfo) {\n\
+        doc.text(`Bike: ${bill.bikeInfo.make} ${bill.bikeInfo.model}`);\n\
+        doc.text(`Registration Number: ${bill.bikeInfo.regNumber}`);\n\
+      }\n\
+      doc.moveDown();\n\
+      \n\
+      // Items Table Headers\n\
+      doc.font("Helvetica-Bold");\n\
+      const tableTop = doc.y;\n\
+      doc.text("Description", 50, tableTop);\n\
+      doc.text("Qty", 280, tableTop, { width: 40, align: "right" });\n\
+      doc.text("Rate", 330, tableTop, { width: 70, align: "right" });\n\
+      doc.text("Amount", 430, tableTop, { width: 70, align: "right" });\n\
+      doc.moveDown();\n\
+      \n\
+      // Items\n\
+      doc.font("Helvetica");\n\
+      let itemY = doc.y;\n\
+      \n\
+      if (bill.items && bill.items.length > 0) {\n\
+        bill.items.forEach(item => {\n\
+          doc.text(item.description, 50, itemY);\n\
+          doc.text(item.quantity.toString(), 280, itemY, { width: 40, align: "right" });\n\
+          doc.text(item.rate.toString(), 330, itemY, { width: 70, align: "right" });\n\
+          doc.text(item.amount.toString(), 430, itemY, { width: 70, align: "right" });\n\
+          itemY = doc.y + 15;\n\
+          doc.y = itemY;\n\
+        });\n\
+      } else {\n\
+        doc.text("No items", 50, itemY);\n\
+      }\n\
+      \n\
+      doc.moveDown();\n\
+      \n\
+      // Totals\n\
+      const totalsY = doc.y + 10;\n\
+      doc.text("Subtotal:", 330, totalsY, { width: 70, align: "right" });\n\
+      doc.text(bill.subtotal.toString(), 430, totalsY, { width: 70, align: "right" });\n\
+      \n\
+      doc.text("Tax:", 330, totalsY + 20, { width: 70, align: "right" });\n\
+      doc.text(bill.tax.toString(), 430, totalsY + 20, { width: 70, align: "right" });\n\
+      \n\
+      doc.font("Helvetica-Bold");\n\
+      doc.text("Total:", 330, totalsY + 40, { width: 70, align: "right" });\n\
+      doc.text(bill.total.toString(), 430, totalsY + 40, { width: 70, align: "right" });\n\
+      \n\
+      // Payment Status\n\
+      doc.moveDown(2);\n\
+      doc.font("Helvetica");\n\
+      doc.text(`Payment Status: ${bill.isPaid ? "Paid" : "Unpaid"}`);\n\
+      if (bill.isPaid) {\n\
+        doc.text(`Payment Method: ${bill.paymentMethod}`);\n\
+      }\n\
+      \n\
+      // Notes\n\
+      if (bill.notes) {\n\
+        doc.moveDown();\n\
+        doc.text("Notes:");\n\
+        doc.text(bill.notes);\n\
+      }\n\
+      \n\
+      // Footer\n\
+      doc.moveDown(2);\n\
+      doc.fontSize(10).text("Thank you for your business!", { align: "center" });\n\
+      doc.text("Gunawardhana Motors, Embilipitiya | Tel: 047-1234567", { align: "center" });\n\
+      \n\
+      // Finalize the PDF\n\
+      doc.end();\n\
+    } catch (error) {\n\
+      logger.error(`Error generating PDF: ${error.message}`);\n\
+      reject(error);\n\
+    }\n\
+  });\n\
+};' > src/services/pdfService.js
 
 # Create BikeModel.js
 RUN printf 'const mongoose = require("mongoose");\n\
@@ -144,6 +255,7 @@ const mongoose = require("mongoose");\n\
 const logger = require("./utils/logger");\n\
 const BikeModel = require("./models/BikeModel");\n\
 const Bill = require("./models/Bill");\n\
+const { generatePDF } = require("./services/pdfService");\n\
 \n\
 // MongoDB connection\n\
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/tmr-bill-generator";\n\
@@ -229,6 +341,39 @@ app.get("/api/bills", async (req, res) => {\n\
   }\n\
 });\n\
 \n\
+// Get bill by ID\n\
+app.get("/api/bills/:id", async (req, res) => {\n\
+  try {\n\
+    const bill = await Bill.findById(req.params.id);\n\
+    if (!bill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    res.status(200).json(bill);\n\
+  } catch (error) {\n\
+    logger.error(`Error fetching bill by ID: ${error.message}`);\n\
+    res.status(500).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
+// Generate PDF for a bill\n\
+app.get("/api/bills/:id/pdf", async (req, res) => {\n\
+  try {\n\
+    const bill = await Bill.findById(req.params.id);\n\
+    if (!bill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    \n\
+    const pdfBuffer = await generatePDF(bill);\n\
+    \n\
+    res.setHeader("Content-Type", "application/pdf");\n\
+    res.setHeader("Content-Disposition", `attachment; filename=TMR_Bill_${bill.billNumber}.pdf`);\n\
+    res.status(200).send(pdfBuffer);\n\
+  } catch (error) {\n\
+    logger.error(`Error generating PDF: ${error.message}`);\n\
+    res.status(500).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
 app.post("/api/bills", async (req, res) => {\n\
   try {\n\
     // Calculate or validate totals\n\
@@ -252,6 +397,85 @@ app.post("/api/bills", async (req, res) => {\n\
     res.status(201).json(savedBill);\n\
   } catch (error) {\n\
     logger.error(`Error creating bill: ${error.message}`);\n\
+    res.status(400).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
+// Update bill\n\
+app.put("/api/bills/:id", async (req, res) => {\n\
+  try {\n\
+    // Calculate or validate totals if items are updated\n\
+    let updateData = req.body;\n\
+    \n\
+    if (req.body.items) {\n\
+      const subtotal = req.body.items.reduce(\n\
+        (sum, item) => sum + Number(item.amount),\n\
+        0\n\
+      );\n\
+      const total = subtotal + Number(req.body.tax || 0);\n\
+      \n\
+      updateData = {\n\
+        ...updateData,\n\
+        subtotal,\n\
+        total\n\
+      };\n\
+    }\n\
+    \n\
+    const updatedBill = await Bill.findByIdAndUpdate(\n\
+      req.params.id,\n\
+      updateData,\n\
+      { new: true, runValidators: true }\n\
+    );\n\
+    \n\
+    if (!updatedBill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    \n\
+    res.status(200).json(updatedBill);\n\
+  } catch (error) {\n\
+    logger.error(`Error updating bill: ${error.message}`);\n\
+    res.status(400).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
+// Delete bill\n\
+app.delete("/api/bills/:id", async (req, res) => {\n\
+  try {\n\
+    const bill = await Bill.findByIdAndDelete(req.params.id);\n\
+    if (!bill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    res.status(200).json({ message: "Bill deleted successfully" });\n\
+  } catch (error) {\n\
+    logger.error(`Error deleting bill: ${error.message}`);\n\
+    res.status(500).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
+// Mark bill as paid\n\
+app.patch("/api/bills/:id/pay", async (req, res) => {\n\
+  try {\n\
+    const { paymentMethod } = req.body;\n\
+    if (!paymentMethod) {\n\
+      return res.status(400).json({ error: "Payment method is required" });\n\
+    }\n\
+    \n\
+    const updatedBill = await Bill.findByIdAndUpdate(\n\
+      req.params.id,\n\
+      { \n\
+        isPaid: true, \n\
+        paymentMethod \n\
+      },\n\
+      { new: true }\n\
+    );\n\
+    \n\
+    if (!updatedBill) {\n\
+      return res.status(404).json({ error: "Bill not found" });\n\
+    }\n\
+    \n\
+    res.status(200).json(updatedBill);\n\
+  } catch (error) {\n\
+    logger.error(`Error marking bill as paid: ${error.message}`);\n\
     res.status(400).json({ error: error.message });\n\
   }\n\
 });\n\
@@ -302,10 +526,12 @@ RUN ls -la
 RUN ls -la src
 RUN ls -la src/utils
 RUN ls -la src/models
+RUN ls -la src/services
 RUN cat src/server.js
 RUN cat src/models/BikeModel.js
 RUN cat src/models/Bill.js
 RUN cat src/utils/logger.js
+RUN cat src/services/pdfService.js
 
 # Expose the port the app will run on
 EXPOSE 8080
