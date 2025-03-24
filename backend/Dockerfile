@@ -23,132 +23,132 @@ RUN printf 'const logger = {\n\
 module.exports = logger;' > src/utils/logger.js
 
 # Create simplified pdfService.js with basic functionality
-RUN echo 'const PDFDocument = require("pdfkit");
-const logger = require("../utils/logger");
-
-// Helper function to safely convert to string
-const safeToString = (val) => {
-  if (val === undefined || val === null) return "";
-  return val.toString();
-};
-
-// Function to generate PDF from bill data
-exports.generatePDF = async (bill) => {
-  return new Promise((resolve, reject) => {
-    try {
-      // Create a new PDF document
-      const doc = new PDFDocument({ margin: 50 });
-      
-      // Create buffer to store PDF
-      const buffers = [];
-      doc.on("data", buffers.push.bind(buffers));
-      doc.on("end", () => {
-        const pdfData = Buffer.concat(buffers);
-        resolve(pdfData);
-      });
-      
-      // Header
-      doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });
-      doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });
-      doc.fontSize(10).text("070 3131 899", { align: "center" });
-      doc.moveDown();
-      
-      // Invoice
-      doc.fontSize(16).text(`Invoice: ${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });
-      doc.moveDown();
-      
-      // Customer Info
-      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString()}`);
-      doc.text(`Customer: ${bill.customerName || bill.customer_name || "N/A"}`);
-      doc.text(`Phone: ${bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A"}`);
-      if (bill.customer_address) {
-        doc.text(`Address: ${bill.customer_address}`);
-      }
-      
-      // Bike Info
-      doc.moveDown();
-      if (bill.model_name) {
-        doc.text(`Bike: ${bill.model_name || "N/A"}`);
-        if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);
-        if (bill.engine_number) doc.text(`Engine Number: ${bill.engine_number}`);
-      } else if (bill.bikeInfo) {
-        doc.text(`Bike: ${bill.bikeInfo.make || ""} ${bill.bikeInfo.model || ""}`);
-        doc.text(`Registration Number: ${bill.bikeInfo.regNumber || "N/A"}`);
-      }
-      
-      // Items Table
-      doc.moveDown();
-      doc.text("Description", 50, doc.y);
-      doc.text("Qty", 300, doc.y, { width: 40, align: "center" });
-      doc.text("Price", 350, doc.y, { width: 70, align: "right" });
-      doc.text("Amount", 450, doc.y, { width: 70, align: "right" });
-      
-      doc.moveDown();
-      let y = doc.y;
-      
-      // Items
-      if (bill.items && bill.items.length > 0) {
-        bill.items.forEach(item => {
-          doc.text(item.description || "Item", 50, y);
-          doc.text(safeToString(item.quantity || 1), 300, y, { width: 40, align: "center" });
-          doc.text(safeToString(item.rate || item.price || 0), 350, y, { width: 70, align: "right" });
-          doc.text(safeToString(item.amount || item.total || 0), 450, y, { width: 70, align: "right" });
-          y = doc.y + 15;
-          doc.y = y;
-        });
-      } else {
-        doc.text("Total Amount", 50, y);
-        doc.text("1", 300, y, { width: 40, align: "center" });
-        doc.text("", 350, y, { width: 70, align: "right" });
-        doc.text(safeToString(bill.total || bill.amount || 0), 450, y, { width: 70, align: "right" });
-      }
-      
-      // Totals
-      doc.moveDown();
-      doc.text("Subtotal:", 350, doc.y, { width: 70, align: "right" });
-      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 450, doc.y, { width: 70, align: "right" });
-      
-      doc.text("Tax:", 350, doc.y + 20, { width: 70, align: "right" });
-      doc.text(safeToString(bill.tax || 0), 450, doc.y + 20, { width: 70, align: "right" });
-      
-      doc.text("Total:", 350, doc.y + 40, { width: 70, align: "right" });
-      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 450, doc.y + 40, { width: 70, align: "right" });
-      
-      // Payment Info
-      doc.moveDown(2);
-      let status = "Unpaid";
-      if (bill.isPaid || bill.paid || bill.status === "paid") {
-        status = "Paid";
-      } else if (bill.status) {
-        status = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);
-      }
-      doc.text(`Payment Status: ${status}`);
-      
-      if (bill.isPaid || bill.paid) {
-        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`);
-      } else if (bill.bill_type) {
-        doc.text(`Bill Type: ${bill.bill_type}`);
-      }
-      
-      // Notes
-      if (bill.notes || bill.remarks) {
-        doc.moveDown();
-        doc.text("Notes:");
-        doc.text(bill.notes || bill.remarks);
-      }
-      
-      // Footer
-      doc.moveDown(2);
-      doc.fontSize(10).text("Thank you for your business!", { align: "center" });
-      doc.text("Gunawardhana Motors, Embilipitiya | Tel: 070 3131 899", { align: "center" });
-      
-      // Finalize PDF
-      doc.end();
-    } catch (error) {
-      logger.error(`Error generating PDF: ${error.message}`);
-      reject(error);
-    }
-  });
+RUN printf 'const PDFDocument = require("pdfkit");\n\
+const logger = require("../utils/logger");\n\
+\n\
+// Helper function to safely convert to string\n\
+const safeToString = (val) => {\n\
+  if (val === undefined || val === null) return "";\n\
+  return val.toString();\n\
+};\n\
+\n\
+// Function to generate PDF from bill data\n\
+exports.generatePDF = async (bill) => {\n\
+  return new Promise((resolve, reject) => {\n\
+    try {\n\
+      // Create a new PDF document\n\
+      const doc = new PDFDocument({ margin: 50 });\n\
+      \n\
+      // Create buffer to store PDF\n\
+      const buffers = [];\n\
+      doc.on("data", buffers.push.bind(buffers));\n\
+      doc.on("end", () => {\n\
+        const pdfData = Buffer.concat(buffers);\n\
+        resolve(pdfData);\n\
+      });\n\
+      \n\
+      // Header\n\
+      doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });\n\
+      doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });\n\
+      doc.fontSize(10).text("070 3131 899", { align: "center" });\n\
+      doc.moveDown();\n\
+      \n\
+      // Invoice\n\
+      doc.fontSize(16).text(`Invoice: ${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });\n\
+      doc.moveDown();\n\
+      \n\
+      // Customer Info\n\
+      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString()}`);\n\
+      doc.text(`Customer: ${bill.customerName || bill.customer_name || "N/A"}`);\n\
+      doc.text(`Phone: ${bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A"}`);\n\
+      if (bill.customer_address) {\n\
+        doc.text(`Address: ${bill.customer_address}`);\n\
+      }\n\
+      \n\
+      // Bike Info\n\
+      doc.moveDown();\n\
+      if (bill.model_name) {\n\
+        doc.text(`Bike: ${bill.model_name || "N/A"}`);\n\
+        if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);\n\
+        if (bill.engine_number) doc.text(`Engine Number: ${bill.engine_number}`);\n\
+      } else if (bill.bikeInfo) {\n\
+        doc.text(`Bike: ${bill.bikeInfo.make || ""} ${bill.bikeInfo.model || ""}`);\n\
+        doc.text(`Registration Number: ${bill.bikeInfo.regNumber || "N/A"}`);\n\
+      }\n\
+      \n\
+      // Items Table\n\
+      doc.moveDown();\n\
+      doc.text("Description", 50, doc.y);\n\
+      doc.text("Qty", 300, doc.y, { width: 40, align: "center" });\n\
+      doc.text("Price", 350, doc.y, { width: 70, align: "right" });\n\
+      doc.text("Amount", 450, doc.y, { width: 70, align: "right" });\n\
+      \n\
+      doc.moveDown();\n\
+      let y = doc.y;\n\
+      \n\
+      // Items\n\
+      if (bill.items && bill.items.length > 0) {\n\
+        bill.items.forEach(item => {\n\
+          doc.text(item.description || "Item", 50, y);\n\
+          doc.text(safeToString(item.quantity || 1), 300, y, { width: 40, align: "center" });\n\
+          doc.text(safeToString(item.rate || item.price || 0), 350, y, { width: 70, align: "right" });\n\
+          doc.text(safeToString(item.amount || item.total || 0), 450, y, { width: 70, align: "right" });\n\
+          y = doc.y + 15;\n\
+          doc.y = y;\n\
+        });\n\
+      } else {\n\
+        doc.text("Total Amount", 50, y);\n\
+        doc.text("1", 300, y, { width: 40, align: "center" });\n\
+        doc.text("", 350, y, { width: 70, align: "right" });\n\
+        doc.text(safeToString(bill.total || bill.amount || 0), 450, y, { width: 70, align: "right" });\n\
+      }\n\
+      \n\
+      // Totals\n\
+      doc.moveDown();\n\
+      doc.text("Subtotal:", 350, doc.y, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 450, doc.y, { width: 70, align: "right" });\n\
+      \n\
+      doc.text("Tax:", 350, doc.y + 20, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.tax || 0), 450, doc.y + 20, { width: 70, align: "right" });\n\
+      \n\
+      doc.text("Total:", 350, doc.y + 40, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 450, doc.y + 40, { width: 70, align: "right" });\n\
+      \n\
+      // Payment Info\n\
+      doc.moveDown(2);\n\
+      let status = "Unpaid";\n\
+      if (bill.isPaid || bill.paid || bill.status === "paid") {\n\
+        status = "Paid";\n\
+      } else if (bill.status) {\n\
+        status = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);\n\
+      }\n\
+      doc.text(`Payment Status: ${status}`);\n\
+      \n\
+      if (bill.isPaid || bill.paid) {\n\
+        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`);\n\
+      } else if (bill.bill_type) {\n\
+        doc.text(`Bill Type: ${bill.bill_type}`);\n\
+      }\n\
+      \n\
+      // Notes\n\
+      if (bill.notes || bill.remarks) {\n\
+        doc.moveDown();\n\
+        doc.text("Notes:");\n\
+        doc.text(bill.notes || bill.remarks);\n\
+      }\n\
+      \n\
+      // Footer\n\
+      doc.moveDown(2);\n\
+      doc.fontSize(10).text("Thank you for your business!", { align: "center" });\n\
+      doc.text("Gunawardhana Motors, Embilipitiya | Tel: 070 3131 899", { align: "center" });\n\
+      \n\
+      // Finalize PDF\n\
+      doc.end();\n\
+    } catch (error) {\n\
+      logger.error(`Error generating PDF: ${error.message}`);\n\
+      reject(error);\n\
+    }\n\
+  });\n\
 };' > src/services/pdfService.js
 
 # Create BikeModel.js with the correct collection name
