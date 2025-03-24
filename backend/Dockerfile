@@ -157,51 +157,33 @@ RUN printf 'const mongoose = require("mongoose");\n\
 const BikeModelSchema = new mongoose.Schema({\n\
   name: {\n\
     type: String,\n\
-    required: true,\n\
-    unique: true\n\
-  },\n\
-  make: {\n\
-    type: String,\n\
-    required: true\n\
-  },\n\
-  model: {\n\
-    type: String,\n\
-    required: true\n\
-  },\n\
-  year: {\n\
-    type: Number\n\
+    required: [true, "Model name is required"],\n\
+    trim: true\n\
   },\n\
   price: {\n\
     type: Number,\n\
-    required: true\n\
+    required: [true, "Price is required"]\n\
   },\n\
-  description: String,\n\
-  specifications: {\n\
-    engine: String,\n\
-    power: String,\n\
-    transmission: String,\n\
-    features: [String]\n\
-  },\n\
-  status: {\n\
+  motor_number_prefix: {\n\
     type: String,\n\
-    enum: ["available", "sold", "reserved"],\n\
-    default: "available"\n\
+    trim: true\n\
   },\n\
-  images: [String],\n\
-  createdAt: {\n\
-    type: Date,\n\
-    default: Date.now\n\
+  chassis_number_prefix: {\n\
+    type: String,\n\
+    trim: true\n\
   },\n\
-  updatedAt: {\n\
-    type: Date,\n\
-    default: Date.now\n\
+  is_ebicycle: {\n\
+    type: Boolean,\n\
+    default: false\n\
+  },\n\
+  can_be_leased: {\n\
+    type: Boolean,\n\
+    default: true\n\
   }\n\
-});\n\
-\n\
-// Add timestamps for tracking updates\n\
-BikeModelSchema.pre("save", function(next) {\n\
-  this.updatedAt = Date.now();\n\
-  next();\n\
+}, {\n\
+  timestamps: true,\n\
+  versionKey: false,\n\
+  collection: "bike_models" // Set the collection name explicitly\n\
 });\n\
 \n\
 module.exports = mongoose.model("BikeModel", BikeModelSchema);\n\
