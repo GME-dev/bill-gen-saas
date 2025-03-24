@@ -22,282 +22,170 @@ RUN printf 'const logger = {\n\
 \n\
 module.exports = logger;' > src/utils/logger.js
 
-# Create pdfService.js for PDF generation - split into multiple commands
-RUN printf 'const PDFDocument = require("pdfkit");\n\
-const fs = require("fs-extra");\n\
-const path = require("path");\n\
-const logger = require("../utils/logger");\n\
-\n\
-// Helper function to safely convert to string\n\
-const safeToString = (val) => {\n\
-  if (val === undefined || val === null) return "";\n\
-  return val.toString();\n\
-};\n\
-\n\
-// Function to generate PDF from bill data\n\
-exports.generatePDF = async (bill) => {\n\
-  return new Promise((resolve, reject) => {\n\
-    try {\n\
-      // Create a new PDF document with better margins\n\
-      const doc = new PDFDocument({ margin: 50, size: "A4" });\n\
-      \n\
-      // Create buffer to store PDF\n\
-      const buffers = [];\n\
-      doc.on("data", buffers.push.bind(buffers));\n\
-      doc.on("end", () => {\n\
-        const pdfData = Buffer.concat(buffers);\n\
-        resolve(pdfData);\n\
-      });\n\
-      \n\
-      // Add a border to the page\n\
-      doc.rect(15, 15, doc.page.width - 30, doc.page.height - 30).stroke();\n' > src/services/pdfService.js
+# Create simplified pdfService.js with basic functionality
+RUN echo 'const PDFDocument = require("pdfkit");
+const logger = require("../utils/logger");
 
-# PDF Part 2 - Header and information
-RUN printf '\n\
-      // Add content to PDF with improved styling\n\
-      // Header\n\
-      doc.fontSize(22).font("Helvetica-Bold").text("GUNAWARDHANA MOTORS", { align: "center" });\n\
-      doc.fontSize(16).font("Helvetica").text("EMBILIPITIYA", { align: "center" });\n\
-      doc.fontSize(12).text("070 3131 899", { align: "center" });\n\
-      doc.moveDown();\n\
-      \n\
-      // Draw a separator line\n\
-      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke();\n\
-      doc.moveDown(0.5);\n\
-      \n\
-      // Bill number with improved styling\n\
-      doc.fontSize(16).font("Helvetica-Bold").text(`INVOICE`, { align: "center" });\n\
-      doc.fontSize(14).text(`#${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });\n\
-      doc.moveDown();\n\
-      \n\
-      // Left and right columns for date and customer info\n\
-      const startY = doc.y;\n\
-      \n\
-      // Left column - Date information\n\
-      doc.font("Helvetica-Bold").fontSize(12).text("Date:", 50, startY);\n\
-      doc.font("Helvetica").text(new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString(), 120, startY);\n' >> src/services/pdfService.js
+// Helper function to safely convert to string
+const safeToString = (val) => {
+  if (val === undefined || val === null) return "";
+  return val.toString();
+};
 
-# PDF Part 3 - Status and customer section
-RUN printf '\n\
-      // Right column - Invoice status\n\
-      let paymentStatus = "Unpaid";\n\
-      if (bill.isPaid || bill.paid || bill.status === "paid") {\n\
-        paymentStatus = "Paid";\n\
-      } else if (bill.status) {\n\
-        paymentStatus = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);\n\
-      }\n\
-      \n\
-      // Status with color coding\n\
-      doc.font("Helvetica-Bold").text("Status:", 400, startY);\n\
-      if (paymentStatus === "Paid") {\n\
-        doc.fillColor("green").font("Helvetica").text(paymentStatus, 450, startY);\n\
-      } else if (paymentStatus === "Leasing") {\n\
-        doc.fillColor("blue").font("Helvetica").text(paymentStatus, 450, startY);\n\
-      } else {\n\
-        doc.fillColor("red").font("Helvetica").text(paymentStatus, 450, startY);\n\
-      }\n\
-      doc.fillColor("black"); // Reset color\n\
-      \n\
-      // Customer Information section\n\
-      doc.moveDown(1.5);\n\
-      doc.font("Helvetica-Bold").fontSize(14).text("Customer Information", 50);\n\
-      doc.moveDown(0.5);\n\
-      \n\
-      // Customer details\n\
-      const customerY = doc.y;\n\
-      doc.font("Helvetica-Bold").fontSize(12).text("Name:", 50, customerY);\n\
-      doc.font("Helvetica").text(bill.customerName || bill.customer_name || "N/A", 150, customerY);\n\
-      \n\
-      doc.font("Helvetica-Bold").text("Phone:", 50, customerY + 20);\n\
-      doc.font("Helvetica").text(bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A", 150, customerY + 20);\n' >> src/services/pdfService.js
+// Function to generate PDF from bill data
+exports.generatePDF = async (bill) => {
+  return new Promise((resolve, reject) => {
+    try {
+      // Create a new PDF document
+      const doc = new PDFDocument({ margin: 50 });
+      
+      // Create buffer to store PDF
+      const buffers = [];
+      doc.on("data", buffers.push.bind(buffers));
+      doc.on("end", () => {
+        const pdfData = Buffer.concat(buffers);
+        resolve(pdfData);
+      });
+      
+      // Header
+      doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });
+      doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });
+      doc.fontSize(10).text("070 3131 899", { align: "center" });
+      doc.moveDown();
+      
+      // Invoice
+      doc.fontSize(16).text(`Invoice: ${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });
+      doc.moveDown();
+      
+      // Customer Info
+      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString()}`);
+      doc.text(`Customer: ${bill.customerName || bill.customer_name || "N/A"}`);
+      doc.text(`Phone: ${bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A"}`);
+      if (bill.customer_address) {
+        doc.text(`Address: ${bill.customer_address}`);
+      }
+      
+      // Bike Info
+      doc.moveDown();
+      if (bill.model_name) {
+        doc.text(`Bike: ${bill.model_name || "N/A"}`);
+        if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);
+        if (bill.engine_number) doc.text(`Engine Number: ${bill.engine_number}`);
+      } else if (bill.bikeInfo) {
+        doc.text(`Bike: ${bill.bikeInfo.make || ""} ${bill.bikeInfo.model || ""}`);
+        doc.text(`Registration Number: ${bill.bikeInfo.regNumber || "N/A"}`);
+      }
+      
+      // Items Table
+      doc.moveDown();
+      doc.text("Description", 50, doc.y);
+      doc.text("Qty", 300, doc.y, { width: 40, align: "center" });
+      doc.text("Price", 350, doc.y, { width: 70, align: "right" });
+      doc.text("Amount", 450, doc.y, { width: 70, align: "right" });
+      
+      doc.moveDown();
+      let y = doc.y;
+      
+      // Items
+      if (bill.items && bill.items.length > 0) {
+        bill.items.forEach(item => {
+          doc.text(item.description || "Item", 50, y);
+          doc.text(safeToString(item.quantity || 1), 300, y, { width: 40, align: "center" });
+          doc.text(safeToString(item.rate || item.price || 0), 350, y, { width: 70, align: "right" });
+          doc.text(safeToString(item.amount || item.total || 0), 450, y, { width: 70, align: "right" });
+          y = doc.y + 15;
+          doc.y = y;
+        });
+      } else {
+        doc.text("Total Amount", 50, y);
+        doc.text("1", 300, y, { width: 40, align: "center" });
+        doc.text("", 350, y, { width: 70, align: "right" });
+        doc.text(safeToString(bill.total || bill.amount || 0), 450, y, { width: 70, align: "right" });
+      }
+      
+      // Totals
+      doc.moveDown();
+      doc.text("Subtotal:", 350, doc.y, { width: 70, align: "right" });
+      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 450, doc.y, { width: 70, align: "right" });
+      
+      doc.text("Tax:", 350, doc.y + 20, { width: 70, align: "right" });
+      doc.text(safeToString(bill.tax || 0), 450, doc.y + 20, { width: 70, align: "right" });
+      
+      doc.text("Total:", 350, doc.y + 40, { width: 70, align: "right" });
+      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 450, doc.y + 40, { width: 70, align: "right" });
+      
+      // Payment Info
+      doc.moveDown(2);
+      let status = "Unpaid";
+      if (bill.isPaid || bill.paid || bill.status === "paid") {
+        status = "Paid";
+      } else if (bill.status) {
+        status = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);
+      }
+      doc.text(`Payment Status: ${status}`);
+      
+      if (bill.isPaid || bill.paid) {
+        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`);
+      } else if (bill.bill_type) {
+        doc.text(`Bill Type: ${bill.bill_type}`);
+      }
+      
+      // Notes
+      if (bill.notes || bill.remarks) {
+        doc.moveDown();
+        doc.text("Notes:");
+        doc.text(bill.notes || bill.remarks);
+      }
+      
+      // Footer
+      doc.moveDown(2);
+      doc.fontSize(10).text("Thank you for your business!", { align: "center" });
+      doc.text("Gunawardhana Motors, Embilipitiya | Tel: 070 3131 899", { align: "center" });
+      
+      // Finalize PDF
+      doc.end();
+    } catch (error) {
+      logger.error(`Error generating PDF: ${error.message}`);
+      reject(error);
+    }
+  });
+};' > src/services/pdfService.js
 
-# PDF Part 4 - More customer info and bike info section
-RUN printf '\n\
-      if (bill.customer_nic) {\n\
-        doc.font("Helvetica-Bold").text("NIC:", 50, customerY + 40);\n\
-        doc.font("Helvetica").text(bill.customer_nic, 150, customerY + 40);\n\
-      }\n\
-      \n\
-      if (bill.customer_address) {\n\
-        const addressY = bill.customer_nic ? customerY + 60 : customerY + 40;\n\
-        doc.font("Helvetica-Bold").text("Address:", 50, addressY);\n\
-        doc.font("Helvetica").text(bill.customer_address, 150, addressY);\n\
-      }\n\
-      \n\
-      // Bike Information\n\
-      doc.moveDown(3);\n\
-      doc.font("Helvetica-Bold").fontSize(14).text("Bike Information", 50);\n\
-      doc.moveDown(0.5);\n\
-      \n\
-      const bikeY = doc.y;\n\
-      \n\
-      if (bill.bikeInfo) {\n\
-        doc.font("Helvetica-Bold").fontSize(12).text("Make/Model:", 50, bikeY);\n\
-        doc.font("Helvetica").text(`${bill.bikeInfo.make || "N/A"} ${bill.bikeInfo.model || "N/A"}`, 150, bikeY);\n\
-        \n\
-        doc.font("Helvetica-Bold").text("Reg Number:", 50, bikeY + 20);\n\
-        doc.font("Helvetica").text(bill.bikeInfo.regNumber || "N/A", 150, bikeY + 20);\n\
-      } else if (bill.model_name) {\n\
-        doc.font("Helvetica-Bold").fontSize(12).text("Model:", 50, bikeY);\n\
-        doc.font("Helvetica").text(bill.model_name || "N/A", 150, bikeY);\n' >> src/services/pdfService.js
+# Create BikeModel.js with the correct collection name
+RUN echo 'const mongoose = require("mongoose");
 
-# PDF Part 5 - Bike details continued and invoice items
-RUN printf '\n\
-        let offset = 0;\n\
-        if (bill.chassis_number) {\n\
-          doc.font("Helvetica-Bold").text("Chassis No:", 50, bikeY + 20);\n\
-          doc.font("Helvetica").text(bill.chassis_number, 150, bikeY + 20);\n\
-          offset = 20;\n\
-        }\n\
-        \n\
-        if (bill.engine_number) {\n\
-          doc.font("Helvetica-Bold").text("Engine No:", 50, bikeY + 20 + offset);\n\
-          doc.font("Helvetica").text(bill.engine_number, 150, bikeY + 20 + offset);\n\
-        }\n\
-      }\n\
-      \n\
-      // Invoice Items\n\
-      doc.moveDown(4);\n\
-      doc.font("Helvetica-Bold").fontSize(14).text("Invoice Items", 50);\n\
-      doc.moveDown(0.5);\n\
-      \n\
-      // Draw table header with background\n\
-      const tableTop = doc.y;\n\
-      doc.rect(50, tableTop, doc.page.width - 100, 20).fill("#e6e6e6");\n\
-      \n\
-      // Table headers\n\
-      doc.fillColor("black");\n\
-      doc.font("Helvetica-Bold").fontSize(12);\n\
-      doc.text("Description", 60, tableTop + 5);\n\
-      doc.text("Qty", 280, tableTop + 5, { width: 40, align: "center" });\n\
-      doc.text("Rate", 330, tableTop + 5, { width: 70, align: "right" });\n\
-      doc.text("Amount", 430, tableTop + 5, { width: 70, align: "right" });\n' >> src/services/pdfService.js
+const BikeModelSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, "Model name is required"],
+    trim: true
+  },
+  price: {
+    type: Number,
+    required: [true, "Price is required"]
+  },
+  motor_number_prefix: {
+    type: String,
+    trim: true
+  },
+  chassis_number_prefix: {
+    type: String,
+    trim: true
+  },
+  is_ebicycle: {
+    type: Boolean,
+    default: false
+  },
+  can_be_leased: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true,
+  versionKey: false,
+  collection: "bike_models" // Set the collection name explicitly to match MongoDB
+});
 
-# PDF Part 6 - Items table 
-RUN printf '\n\
-      // Items rows\n\
-      let itemY = tableTop + 25;\n\
-      \n\
-      if (bill.items && bill.items.length > 0) {\n\
-        bill.items.forEach((item, i) => {\n\
-          // Add zebra striping\n\
-          if (i % 2 === 0) {\n\
-            doc.rect(50, itemY - 5, doc.page.width - 100, 25).fill("#f8f8f8");\n\
-            doc.fillColor("black");\n\
-          }\n\
-          \n\
-          doc.font("Helvetica").fontSize(11);\n\
-          doc.text(item.description || "Item", 60, itemY);\n\
-          doc.text(safeToString(item.quantity || 1), 280, itemY, { width: 40, align: "center" });\n\
-          doc.text(safeToString(item.rate || item.price || 0), 330, itemY, { width: 70, align: "right" });\n\
-          doc.text(safeToString(item.amount || item.total || 0), 430, itemY, { width: 70, align: "right" });\n\
-          \n\
-          itemY = doc.y + 15;\n\
-          doc.y = itemY;\n\
-        });\n\
-      } else {\n\
-        // Handle case where there are no items or items is in a different format\n\
-        doc.rect(50, itemY - 5, doc.page.width - 100, 25).fill("#f8f8f8");\n\
-        doc.fillColor("black");\n\
-        doc.font("Helvetica").fontSize(11);\n\
-        doc.text("Total Amount", 60, itemY);\n\
-        doc.text("1", 280, itemY, { width: 40, align: "center" });\n\
-        doc.text("", 330, itemY, { width: 70, align: "right" });\n\
-        doc.text(safeToString(bill.total || bill.amount || 0), 430, itemY, { width: 70, align: "right" });\n\
-      }\n' >> src/services/pdfService.js
-
-# PDF Part 7 - Totals section
-RUN printf '\n\
-      // Add bottom border to table\n\
-      doc.moveTo(50, doc.y + 10).lineTo(doc.page.width - 50, doc.y + 10).stroke();\n\
-      \n\
-      // Totals section with background shading\n\
-      const totalsStartY = doc.y + 20;\n\
-      \n\
-      // Subtotal\n\
-      doc.font("Helvetica").fontSize(12);\n\
-      doc.text("Subtotal:", 330, totalsStartY, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 430, totalsStartY, { width: 70, align: "right" });\n\
-      \n\
-      // Tax\n\
-      doc.text("Tax:", 330, totalsStartY + 20, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.tax || 0), 430, totalsStartY + 20, { width: 70, align: "right" });\n\
-      \n\
-      // Total with background highlight\n\
-      doc.rect(330, totalsStartY + 40, 170, 25).fill("#e6e6e6");\n\
-      doc.fillColor("black");\n\
-      doc.font("Helvetica-Bold").fontSize(12);\n\
-      doc.text("Total:", 330, totalsStartY + 45, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 430, totalsStartY + 45, { width: 70, align: "right" });\n' >> src/services/pdfService.js
-
-# PDF Part 8 - Footer and finalization
-RUN printf '\n\
-      // Payment details\n\
-      doc.moveDown(3);\n\
-      if (bill.paymentMethod || bill.bill_type) {\n\
-        doc.font("Helvetica").fontSize(12);\n\
-        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`, { align: "left" });\n\
-      }\n\
-      \n\
-      // Notes\n\
-      if (bill.notes || bill.remarks) {\n\
-        doc.moveDown();\n\
-        doc.font("Helvetica-Bold").fontSize(12).text("Notes:");\n\
-        doc.font("Helvetica").text(bill.notes || bill.remarks);\n\
-      }\n\
-      \n\
-      // Footer\n\
-      const footerY = doc.page.height - 100;\n\
-      doc.moveTo(50, footerY).lineTo(doc.page.width - 50, footerY).stroke();\n\
-      doc.moveDown(0.5);\n\
-      \n\
-      doc.fontSize(10).font("Helvetica-Bold").text("Thank you for your business!", { align: "center" });\n\
-      doc.fontSize(10).font("Helvetica").text("Gunawardhana Motors, Embilipitiya | Tel: 070 3131 899", { align: "center" });\n\
-      \n\
-      // Finalize the PDF\n\
-      doc.end();\n\
-    } catch (error) {\n\
-      logger.error(`Error generating PDF: ${error.message}`);\n\
-      reject(error);\n\
-    }\n\
-  });\n\
-};' >> src/services/pdfService.js
-
-# Create BikeModel.js
-RUN printf 'const mongoose = require("mongoose");\n\
-\n\
-const BikeModelSchema = new mongoose.Schema({\n\
-  name: {\n\
-    type: String,\n\
-    required: [true, "Model name is required"],\n\
-    trim: true\n\
-  },\n\
-  price: {\n\
-    type: Number,\n\
-    required: [true, "Price is required"]\n\
-  },\n\
-  motor_number_prefix: {\n\
-    type: String,\n\
-    trim: true\n\
-  },\n\
-  chassis_number_prefix: {\n\
-    type: String,\n\
-    trim: true\n\
-  },\n\
-  is_ebicycle: {\n\
-    type: Boolean,\n\
-    default: false\n\
-  },\n\
-  can_be_leased: {\n\
-    type: Boolean,\n\
-    default: true\n\
-  }\n\
-}, {\n\
-  timestamps: true,\n\
-  versionKey: false,\n\
-  collection: "bike_models" // Set the collection name explicitly to match MongoDB\n\
-});\n\
-\n\
 module.exports = mongoose.model("BikeModel", BikeModelSchema);' > src/models/BikeModel.js
 
 # Create Bill.js
