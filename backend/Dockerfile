@@ -4,7 +4,8 @@ WORKDIR /app
 # Install dependencies only when needed
 FROM base AS deps
 COPY package*.json ./
-RUN npm install
+# Include development dependencies for TypeScript compilation
+RUN npm install --include=dev
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -15,11 +16,11 @@ COPY . .
 # Log the directory contents
 RUN ls -la
 
-# Install TypeScript globally
-RUN npm install -g typescript
-
 # Next, build the application
 RUN mkdir -p dist
+# Install types needed for compilation
+RUN npm install -g typescript
+RUN npm install --save-dev @types/express @types/cors @types/helmet @types/morgan @types/pdfkit
 RUN npx tsc
 RUN mkdir -p dist/templates
 RUN if [ -d "src/templates" ]; then cp -r src/templates/* dist/templates/ 2>/dev/null || true; fi
