@@ -5,14 +5,29 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
+# Debug: Check package.json contents
+RUN cat package.json && \
+    echo "\nDirectory contents:" && \
+    ls -la
+
 # Install ALL dependencies (including dev dependencies)
 RUN npm install
 
 # Copy source code
 COPY . .
 
+# Debug: List directory contents after copy
+RUN echo "\nDirectory contents after full copy:" && \
+    ls -la && \
+    echo "\npackage.json contents:" && \
+    cat package.json
+
 # Create necessary directories
 RUN mkdir -p dist/templates data
+
+# Debug: Check TypeScript installation
+RUN echo "\nTypeScript version:" && \
+    ./node_modules/.bin/tsc --version
 
 # Build TypeScript code and copy templates
 RUN npm run build
