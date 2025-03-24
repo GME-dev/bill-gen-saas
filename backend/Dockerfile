@@ -8,13 +8,13 @@ COPY package*.json ./
 # Install ALL dependencies
 RUN npm install
 
-# Copy source code and templates
+# Copy source code
 COPY . .
 
-# Create templates directory if it doesn't exist
-RUN mkdir -p dist/templates
+# Create necessary directories
+RUN mkdir -p dist/templates data
 
-# Build TypeScript code and copy templates
+# Build TypeScript code
 RUN NODE_ENV=production npm run build && \
     cp -r src/templates/* dist/templates/ 2>/dev/null || true
 
@@ -23,20 +23,24 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and install production dependencies
 COPY package*.json ./
-
-# Install production dependencies only
 RUN npm install --omit=dev
 
-# Copy built files and templates from builder stage
+# Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/templates ./dist/templates
 
-# Set default environment variables
+# Create data directory for SQLite
+RUN mkdir -p data
+
+# Set default environment variables (these can be overridden by Railway)
 ENV PORT=8080 \
     NODE_ENV=production \
-    CORS_ORIGIN=https://bill-gen-saas.pages.dev
+    CORS_ORIGIN=https://bill-gen-saas.pages.dev \
+    DB_PATH=./data/bills.db \
+    MONGODB_DB_NAME=bill-gen \
+    TEMPLATES_DIR=./templates
 
 # Expose port
 EXPOSE 8080
