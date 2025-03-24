@@ -77,32 +77,45 @@ exports.generatePDF = async (bill) => {\n\
         resolve(pdfData);\n\
       });\n\
       \n\
-      // Header\n\
-      doc.fontSize(16).text("TMR TRADING LANKA (PVT) LTD", { align: "center" });\n\
-      doc.moveDown(0.5);\n\
-      doc.fontSize(12).text("GUNAWARDANA MOTORS, EMBILIPITIYA", { align: "left" });\n\
+      // Add font and color styling\n\
+      doc.font("Helvetica-Bold");\n\
+      doc.fillColor("#000080"); // Dark blue for header\n\
+      \n\
+      // Header with company logo/name\n\
+      doc.fontSize(18).text("TMR TRADING LANKA (PVT) LTD", { align: "center" });\n\
+      doc.fillColor("#000000"); // Back to black text\n\
+      doc.fontSize(11).moveDown(0.5);\n\
+      doc.font("Helvetica-Bold").text("GUNAWARDANA MOTORS, EMBILIPITIYA", { align: "left" });\n\
       doc.text("AUTHORIZED DEALER - EMBILIPITIYA", { align: "left" });\n\
       \n\
       // Bill Number and Date - At the top right\n\
       const billNumber = bill.billNumber || bill.bill_number || "N/A";\n\
+      doc.fillColor("#000080"); // Dark blue for header\n\
       doc.text(`Bill No: ${billNumber}`, 400, 50, { align: "right" });\n\
       \n\
       const today = new Date(bill.serviceDate || bill.date || Date.now());\n\
       const formattedDate = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;\n\
       doc.text(`Date: ${formattedDate}`, 400, 70, { align: "right" });\n\
+      doc.fillColor("#000000"); // Back to black text\n\
       \n\
-      // Customer Details\n\
+      // Customer Details section\n\
       doc.moveDown(1.5);\n\
-      doc.fontSize(11).text("Customer Details:", { underline: true });\n\
+      doc.fillColor("#000080"); // Dark blue for section headers\n\
+      doc.font("Helvetica-Bold").fontSize(12).text("Customer Details:", { underline: true });\n\
+      doc.fillColor("#000000"); // Back to black text\n\
       doc.moveDown(0.5);\n\
+      doc.font("Helvetica").fontSize(11);\n\
       doc.text(`Name: ${bill.customerName || bill.customer_name || "N/A"}`);\n\
       doc.text(`NIC: ${bill.customer_nic || "N/A"}`);\n\
       doc.text(`Address: ${bill.customer_address || "N/A"}`);\n\
       \n\
-      // Vehicle Details\n\
+      // Vehicle Details section\n\
       doc.moveDown(1);\n\
-      doc.text("Vehicle Details:", { underline: true });\n\
+      doc.fillColor("#000080"); // Dark blue for section headers\n\
+      doc.font("Helvetica-Bold").fontSize(12).text("Vehicle Details:", { underline: true });\n\
+      doc.fillColor("#000000"); // Back to black text\n\
       doc.moveDown(0.5);\n\
+      doc.font("Helvetica").fontSize(11);\n\
       doc.text(`Model: ${bill.model_name || "N/A"}`);\n\
       if (bill.engine_number) doc.text(`Motor Number: ${bill.engine_number}`);\n\
       if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);\n\
@@ -112,25 +125,35 @@ exports.generatePDF = async (bill) => {\n\
                         bill.model_name?.includes("COLA5") || \n\
                         bill.model_name?.includes("X01");\n\
       \n\
-      // Payment Details\n\
+      // Payment Details section\n\
       doc.moveDown(1);\n\
-      doc.text("Payment Details:", { underline: true });\n\
+      doc.fillColor("#000080"); // Dark blue for section headers\n\
+      doc.font("Helvetica-Bold").fontSize(12).text("Payment Details:", { underline: true });\n\
+      doc.fillColor("#000000"); // Back to black text\n\
       doc.moveDown(0.5);\n\
       \n\
-      // Create payment table\n\
+      // Create payment table with borders and cleaner styling\n\
       const tableTop = doc.y;\n\
       const tableLeft = 50;\n\
-      const colWidth = 170;\n\
-      const amountColWidth = 100;\n\
+      const colWidth = 250;\n\
+      const amountColWidth = 220;\n\
       const rowHeight = 25;\n\
       \n\
+      // Table styling\n\
+      doc.lineWidth(1);\n\
+      doc.strokeColor("#000080"); // Dark blue for table borders\n\
+      \n\
       // Table headers\n\
-      doc.rect(tableLeft, tableTop, colWidth + amountColWidth, rowHeight).stroke();\n\
+      doc.rect(tableLeft, tableTop, colWidth, rowHeight).fill("#f0f0f0").stroke();\n\
+      doc.rect(tableLeft + colWidth, tableTop, amountColWidth, rowHeight).fill("#f0f0f0").stroke();\n\
+      doc.fillColor("#000000");\n\
+      doc.font("Helvetica-Bold").fontSize(11);\n\
       doc.text("Description", tableLeft + 10, tableTop + 8);\n\
       doc.text("Amount (Rs.)", tableLeft + colWidth + 10, tableTop + 8);\n\
       \n\
       let currentY = tableTop + rowHeight;\n\
       let totalAmount = 0;\n\
+      doc.font("Helvetica").fontSize(10);\n\
       \n\
       // Handle different bill types\n\
       if (bill.bill_type === "leasing") {\n\
@@ -140,21 +163,24 @@ exports.generatePDF = async (bill) => {\n\
         const downPayment = Number(bill.down_payment || bill.advance || 0);\n\
         \n\
         // Bike Price\n\
-        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
         doc.text("Bike Price", tableLeft + 10, currentY + 8);\n\
         doc.text(formatCurrency(bikePrice), tableLeft + colWidth + 10, currentY + 8);\n\
         currentY += rowHeight;\n\
         \n\
         // CPZ Charge (if not e-bicycle)\n\
         if (!isEbicycle) {\n\
-          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
           doc.text("CPZ Charge", tableLeft + 10, currentY + 8);\n\
           doc.text(formatCurrency(cpzAmount), tableLeft + colWidth + 10, currentY + 8);\n\
           currentY += rowHeight;\n\
         }\n\
         \n\
         // Down Payment\n\
-        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
         doc.text("Down Payment", tableLeft + 10, currentY + 8);\n\
         doc.text(formatCurrency(downPayment), tableLeft + colWidth + 10, currentY + 8);\n\
         currentY += rowHeight;\n\
@@ -170,14 +196,16 @@ exports.generatePDF = async (bill) => {\n\
         const advanceAmount = Number(bill.advance || 0);\n\
         \n\
         // Bike Price\n\
-        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
         doc.text("Bike Price", tableLeft + 10, currentY + 8);\n\
         doc.text(formatCurrency(bikePrice), tableLeft + colWidth + 10, currentY + 8);\n\
         currentY += rowHeight;\n\
         \n\
         // RMV/CPZ Charge (if not e-bicycle)\n\
         if (!isEbicycle) {\n\
-          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
           doc.text(rmvLabel, tableLeft + 10, currentY + 8);\n\
           doc.text(formatCurrency(rmvAmount), tableLeft + colWidth + 10, currentY + 8);\n\
           currentY += rowHeight;\n\
@@ -187,7 +215,8 @@ exports.generatePDF = async (bill) => {\n\
         let fullAmount = bikePrice + rmvAmount;\n\
         if (bill.bill_type === "leasing" && bill.down_payment) {\n\
           const downPayment = Number(bill.down_payment || 0);\n\
-          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
           doc.text("Down Payment", tableLeft + 10, currentY + 8);\n\
           doc.text(formatCurrency(downPayment), tableLeft + colWidth + 10, currentY + 8);\n\
           currentY += rowHeight;\n\
@@ -195,14 +224,16 @@ exports.generatePDF = async (bill) => {\n\
         }\n\
         \n\
         // Advance Amount\n\
-        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
         doc.text("Advance Amount", tableLeft + 10, currentY + 8);\n\
         doc.text(formatCurrency(advanceAmount), tableLeft + colWidth + 10, currentY + 8);\n\
         currentY += rowHeight;\n\
         \n\
         // Balance\n\
         const balance = fullAmount - advanceAmount;\n\
-        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
         doc.text("Balance", tableLeft + 10, currentY + 8);\n\
         doc.text(formatCurrency(balance), tableLeft + colWidth + 10, currentY + 8);\n\
         currentY += rowHeight;\n\
@@ -216,14 +247,16 @@ exports.generatePDF = async (bill) => {\n\
         const rmvAmount = isEbicycle ? 0 : 13000;\n\
         \n\
         // Bike Price\n\
-        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+        doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
         doc.text("Bike Price", tableLeft + 10, currentY + 8);\n\
         doc.text(formatCurrency(bikePrice), tableLeft + colWidth + 10, currentY + 8);\n\
         currentY += rowHeight;\n\
         \n\
         // RMV Charge (if not e-bicycle)\n\
         if (!isEbicycle) {\n\
-          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft, currentY, colWidth, rowHeight).stroke();\n\
+          doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).stroke();\n\
           doc.text("RMV Charge", tableLeft + 10, currentY + 8);\n\
           doc.text(formatCurrency(rmvAmount), tableLeft + colWidth + 10, currentY + 8);\n\
           currentY += rowHeight;\n\
@@ -233,30 +266,40 @@ exports.generatePDF = async (bill) => {\n\
         totalAmount = bikePrice + rmvAmount;\n\
       }\n\
       \n\
-      // Total Amount\n\
-      doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
-      doc.text("Total Amount", tableLeft + 10, currentY + 8, { bold: true });\n\
-      doc.text(formatCurrency(totalAmount), tableLeft + colWidth + 10, currentY + 8, { bold: true });\n\
+      // Total Amount (highlighted)\n\
+      doc.rect(tableLeft, currentY, colWidth, rowHeight).fill("#f0f0f0").stroke();\n\
+      doc.rect(tableLeft + colWidth, currentY, amountColWidth, rowHeight).fill("#f0f0f0").stroke();\n\
+      doc.fillColor("#000080");\n\
+      doc.font("Helvetica-Bold").fontSize(11);\n\
+      doc.text("Total Amount", tableLeft + 10, currentY + 8);\n\
+      doc.text(formatCurrency(totalAmount), tableLeft + colWidth + 10, currentY + 8);\n\
+      doc.fillColor("#000000");\n\
       \n\
-      // Terms and Conditions\n\
+      // Terms and Conditions section\n\
       doc.moveDown(2);\n\
-      doc.fontSize(10).text("Terms and Conditions:", { underline: true });\n\
+      doc.fillColor("#000080");\n\
+      doc.font("Helvetica-Bold").fontSize(11).text("Terms and Conditions:", { underline: true });\n\
+      doc.fillColor("#000000");\n\
       doc.moveDown(0.3);\n\
+      doc.font("Helvetica").fontSize(10);\n\
       doc.text("1. All prices are inclusive of taxes.");\n\
       doc.text("2. Warranty is subject to terms and conditions.");\n\
       doc.text("3. This is a computer-generated bill.");\n\
       doc.text("4. RMV registration will be completed within 30 days.");\n\
       \n\
-      // Signature\n\
+      // Signature lines\n\
       doc.moveDown(2);\n\
-      doc.text("__________________________", 50, doc.y);\n\
+      doc.strokeColor("#000000");\n\
+      doc.lineWidth(0.5);\n\
+      doc.moveTo(50, doc.y).lineTo(200, doc.y).stroke();\n\
       doc.text("Dealer Signature", 50, doc.y + 5);\n\
       \n\
-      doc.text("__________________________", 350, doc.y - 15);\n\
+      doc.moveTo(350, doc.y - 15).lineTo(500, doc.y - 15).stroke();\n\
       doc.text("Rubber Stamp", 350, doc.y + 5);\n\
       \n\
       // Footer\n\
       doc.moveDown(1);\n\
+      doc.fillColor("#000080");\n\
       doc.fontSize(10).text("Thank you for your business!", { align: "center" });\n\
       \n\
       // Finalize PDF\n\
@@ -330,128 +373,91 @@ BikeModelSchema.pre("save", function(next) {\n\
 module.exports = mongoose.model("BikeModel", BikeModelSchema);\n\
 ' > src/models/BikeModel.js
 
-# Create Bill.js
+# Create src/models/Bill.js with proper schema definition
 RUN printf 'const mongoose = require("mongoose");\n\
 \n\
-// Define schema for items in bill\n\
-const BillItemSchema = new mongoose.Schema({\n\
-  description: { type: String, required: true },\n\
-  quantity: { type: Number, required: true, default: 1 },\n\
-  rate: { type: Number, required: true },\n\
-  amount: { type: Number, required: true }\n\
-});\n\
+const BillSchema = new mongoose.Schema(\n\
+  {\n\
+    bill_type: {\n\
+      type: String,\n\
+      enum: ["cash", "leasing", "advance"],\n\
+      required: [true, "Bill type is required"],\n\
+    },\n\
+    bill_status: {\n\
+      type: String,\n\
+      enum: ["pending", "paid", "cancelled"],\n\
+      default: "pending",\n\
+    },\n\
+    billNumber: {\n\
+      type: String,\n\
+      // Generate a unique bill number with date and random component\n\
+      default: function() {\n\
+        const date = new Date();\n\
+        const year = date.getFullYear();\n\
+        const month = String(date.getMonth() + 1).padStart(2, "0");\n\
+        const day = String(date.getDate()).padStart(2, "0");\n\
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");\n\
+        return `TMR-${year}${month}${day}-${random}`;\n\
+      },\n\
+    },\n\
+    bill_number: String, // For backward compatibility\n\
+    date: {\n\
+      type: Date,\n\
+      default: Date.now,\n\
+    },\n\
+    customerName: String,\n\
+    customer_name: String,\n\
+    customer_nic: String,\n\
+    customer_address: String,\n\
+    customer_phone: String,\n\
+    model_name: String,\n\
+    bike_price: Number,\n\
+    is_ebicycle: {\n\
+      type: Boolean,\n\
+      default: false,\n\
+    },\n\
+    price: Number,\n\
+    subtotal: Number,\n\
+    advance: Number,\n\
+    down_payment: Number,\n\
+    engine_number: String,\n\
+    chassis_number: String,\n\
+    serviceDate: Date,\n\
+    leasing_company: String,\n\
+    leasing_amount: Number,\n\
+  },\n\
+  { timestamps: true }\n\
+);\n\
 \n\
-// Define schema for bike info\n\
-const BikeInfoSchema = new mongoose.Schema({\n\
-  make: { type: String, required: true },\n\
-  model: { type: String, required: true },\n\
-  regNumber: { type: String, required: true }\n\
-});\n\
-\n\
-const BillSchema = new mongoose.Schema({\n\
-  billNumber: {\n\
-    type: String,\n\
-    required: function() { return !this.bill_number; } // Only required if bill_number is not set\n\
-  },\n\
-  bill_number: String,  // Alternative field for compatibility\n\
-  bill_type: { \n\
-    type: String,\n\
-    enum: ["cash", "card", "online", "leasing", "pending"],\n\
-    default: "cash"\n\
-  },\n\
-  status: {\n\
-    type: String,\n\
-    enum: ["pending", "paid", "cancelled", "completed", "leasing"],\n\
-    default: "pending"\n\
-  },\n\
-  customerName: {\n\
-    type: String,\n\
-    required: function() { return !this.customer_name; } // Only required if customer_name is not set\n\
-  },\n\
-  customer_name: String,  // Alternative field for compatibility\n\
-  customerPhone: {\n\
-    type: String,\n\
-    required: function() { return !this.customer_phone && !this.customer_nic; } // Only required if alternatives not set\n\
-  },\n\
-  customer_phone: String,  // Alternative field for compatibility\n\
-  customer_nic: String,    // Additional field for NIC\n\
-  customer_address: String, // Additional field for address\n\
-  bikeInfo: BikeInfoSchema,\n\
-  model_name: String,       // For bike model reference\n\
-  chassis_number: String,   // For bike identification\n\
-  engine_number: String,    // For bike identification\n\
-  bike_price: Number,       // Price of the bike only\n\
-  is_ebicycle: Boolean,     // Whether this is an e-bicycle\n\
-  rmv_charge: Number,       // RMV charge for regular bikes (13,000)\n\
-  cpz_charge: Number,       // CPZ charge for leasing bikes (13,500)\n\
-  down_payment: Number,     // Down payment for leasing\n\
-  advance: Number,          // Advance payment amount\n\
-  serviceDate: {\n\
-    type: Date,\n\
-    required: true,\n\
-    default: Date.now\n\
-  },\n\
-  date: Date,               // Alternative date field\n\
-  items: [BillItemSchema],\n\
-  subtotal: {\n\
-    type: Number,\n\
-    required: true,\n\
-    default: 0\n\
-  },\n\
-  subTotal: Number,         // Alternative subtotal field\n\
-  tax: {\n\
-    type: Number,\n\
-    required: true,\n\
-    default: 0\n\
-  },\n\
-  total: {\n\
-    type: Number,\n\
-    required: true,\n\
-    default: 0\n\
-  },\n\
-  amount: Number,           // Alternative total field\n\
-  isPaid: {\n\
-    type: Boolean,\n\
-    default: false\n\
-  },\n\
-  paid: Boolean,            // Alternative paid field\n\
-  paymentMethod: {\n\
-    type: String,\n\
-    enum: ["cash", "card", "online", "leasing", "pending"],\n\
-    default: "pending"\n\
-  },\n\
-  notes: {\n\
-    type: String\n\
-  },\n\
-  remarks: String           // Alternative notes field\n\
-}, {\n\
-  timestamps: true,\n\
-  strict: false  // Allow additional fields not in schema\n\
-});\n\
-\n\
-// Auto-generate bill number before saving\n\
-BillSchema.pre("save", async function(next) {\n\
-  try {\n\
-    if (this.isNew && !this.billNumber && !this.bill_number) {\n\
-      const today = new Date();\n\
-      const year = today.getFullYear().toString().substr(-2);\n\
-      const month = (today.getMonth() + 1).toString().padStart(2, "0");\n\
-      
-      const count = await mongoose.model("Bill").countDocuments();\n\
-      this.billNumber = `TMR-${year}-${month}-${(count + 1).toString().padStart(4, "0")}`;\n\
-      
-      // Set the alternative field for compatibility\n\
-      if (!this.bill_number) {\n\
-        this.bill_number = this.billNumber;\n\
-      }\n\
-    }\n\
-    next();\n\
-  } catch (error) {\n\
-    next(error);\n\
+// Ensure billNumber and bill_number sync and are never null\n\
+BillSchema.pre("save", function (next) {\n\
+  // Make sure billNumber is set\n\
+  if (!this.billNumber) {\n\
+    const date = new Date();\n\
+    const year = date.getFullYear();\n\
+    const month = String(date.getMonth() + 1).padStart(2, "0");\n\
+    const day = String(date.getDate()).padStart(2, "0");\n\
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");\n\
+    this.billNumber = `TMR-${year}${month}${day}-${random}`;\n\
   }\n\
+  \n\
+  // Sync bill_number for backward compatibility\n\
+  this.bill_number = this.billNumber;\n\
+  \n\
+  // Auto-detect e-bicycle based on model name\n\
+  if (this.model_name && (this.model_name.includes("COLA5") || this.model_name.includes("X01"))) {\n\
+    this.is_ebicycle = true;\n\
+  }\n\
+  \n\
+  next();\n\
 });\n\
 \n\
-module.exports = mongoose.model("Bill", BillSchema);' > src/models/Bill.js
+// Index
+BillSchema.index({ billNumber: 1 });\n\
+\n\
+const Bill = mongoose.model("Bill", BillSchema, "bills");\n\
+\n\
+module.exports = Bill;' > src/models/Bill.js
 
 # Create server.js - this needs to be properly enclosed in a RUN command
 RUN printf '// server.js\n\
