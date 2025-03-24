@@ -351,8 +351,7 @@ const BikeInfoSchema = new mongoose.Schema({\n\
 const BillSchema = new mongoose.Schema({\n\
   billNumber: {\n\
     type: String,\n\
-    required: true,\n\
-    unique: true\n\
+    required: function() { return !this.bill_number; } // Only required if bill_number is not set\n\
   },\n\
   bill_number: String,  // Alternative field for compatibility\n\
   bill_type: { \n\
@@ -367,12 +366,12 @@ const BillSchema = new mongoose.Schema({\n\
   },\n\
   customerName: {\n\
     type: String,\n\
-    required: true\n\
+    required: function() { return !this.customer_name; } // Only required if customer_name is not set\n\
   },\n\
   customer_name: String,  // Alternative field for compatibility\n\
   customerPhone: {\n\
     type: String,\n\
-    required: true\n\
+    required: function() { return !this.customer_phone && !this.customer_nic; } // Only required if alternatives not set\n\
   },\n\
   customer_phone: String,  // Alternative field for compatibility\n\
   customer_nic: String,    // Additional field for NIC\n\
@@ -396,7 +395,8 @@ const BillSchema = new mongoose.Schema({\n\
   items: [BillItemSchema],\n\
   subtotal: {\n\
     type: Number,\n\
-    required: true\n\
+    required: true,\n\
+    default: 0\n\
   },\n\
   subTotal: Number,         // Alternative subtotal field\n\
   tax: {\n\
@@ -406,7 +406,8 @@ const BillSchema = new mongoose.Schema({\n\
   },\n\
   total: {\n\
     type: Number,\n\
-    required: true\n\
+    required: true,\n\
+    default: 0\n\
   },\n\
   amount: Number,           // Alternative total field\n\
   isPaid: {\n\
@@ -435,10 +436,10 @@ BillSchema.pre("save", async function(next) {\n\
       const today = new Date();\n\
       const year = today.getFullYear().toString().substr(-2);\n\
       const month = (today.getMonth() + 1).toString().padStart(2, "0");\n\
-      \n\
+      
       const count = await mongoose.model("Bill").countDocuments();\n\
       this.billNumber = `TMR-${year}-${month}-${(count + 1).toString().padStart(4, "0")}`;\n\
-      \n\
+      
       // Set the alternative field for compatibility\n\
       if (!this.bill_number) {\n\
         this.bill_number = this.billNumber;\n\
@@ -573,24 +574,38 @@ app.post("/api/bike-models", async (req, res) => {\n\
 app.post("/api/bills", async (req, res) => {\n\
   try {\n\
     let billData = req.body;\n\
-    \n\
+    
+    // Generate bill number if not provided\n\
+    if (!billData.billNumber && !billData.bill_number) {\n\
+      const today = new Date();\n\
+      const year = today.getFullYear().toString().substr(-2);\n\
+      const month = (today.getMonth() + 1).toString().padStart(2, "0");\n\
+      
+      // Get counter\n\
+      const count = await Bill.countDocuments();\n\
+      const billNumber = `TMR-${year}-${month}-${(count + 1).toString().padStart(4, "0")}`;\n\
+      
+      billData.billNumber = billNumber;\n\
+      billData.bill_number = billNumber;\n\
+    }\n\
+    
     // Determine if bike is e-bicycle\n\
     const isEbicycle = billData.is_ebicycle || \n\
                       billData.model_name?.includes("COLA5") || \n\
                       billData.model_name?.includes("X01");\n\
-    \n\
+    
     // Set bike price\n\
     const bikePrice = Number(billData.bike_price || billData.price || billData.subtotal || 0);\n\
-    \n\
+    
     // Calculate RMV/CPZ charges\n\
     const rmvCharge = isEbicycle ? 0 : 13000;\n\
     const cpzCharge = isEbicycle ? 0 : 13500;\n\
-    \n\
+    
     // Handle different bill types\n\
     if (billData.bill_type === "leasing") {\n\
       // For leasing, total is down payment\n\
       const downPayment = Number(billData.down_payment || 0);\n\
-      \n\
+      
       billData = {\n\
         ...billData,\n\
         is_ebicycle: isEbicycle,\n\
@@ -605,12 +620,12 @@ app.post("/api/bills", async (req, res) => {\n\
         status: "leasing",\n\
         paymentMethod: "leasing"\n\
       };\n\
-      \n\
+      
     } else if (billData.advance && Number(billData.advance) > 0) {\n\
       // For advance payment\n\
       const advanceAmount = Number(billData.advance || 0);\n\
       let fullAmount = bikePrice;\n\
-      \n\
+      
       if (billData.bill_type === "leasing") {\n\
         // For leasing advance, total is down payment\n\
         const downPayment = Number(billData.down_payment || 0);\n\
@@ -621,10 +636,10 @@ app.post("/api/bills", async (req, res) => {\n\
         fullAmount = bikePrice + rmvCharge;\n\
         billData.rmv_charge = rmvCharge;\n\
       }\n\
-      \n\
+      
       // Calculate balance\n\
       const balance = fullAmount - advanceAmount;\n\
-      \n\
+      
       billData = {\n\
         ...billData,\n\
         is_ebicycle: isEbicycle,\n\
@@ -638,11 +653,11 @@ app.post("/api/bills", async (req, res) => {\n\
         isPaid: false,\n\
         status: "pending"\n\
       };\n\
-      \n\
+      
     } else {\n\
       // Regular cash bill\n\
       const totalAmount = bikePrice + (isEbicycle ? 0 : rmvCharge);\n\
-      \n\
+      
       billData = {\n\
         ...billData,\n\
         is_ebicycle: isEbicycle,\n\
@@ -657,7 +672,7 @@ app.post("/api/bills", async (req, res) => {\n\
         paymentMethod: billData.bill_type === "cash" ? "cash" : billData.paymentMethod || "pending"\n\
       };\n\
     }\n\
-    \n\
+    
     // Get bike model details if not provided\n\
     if (billData.model_name && !billData.bike_price) {\n\
       try {\n\
@@ -693,7 +708,7 @@ app.post("/api/bills", async (req, res) => {\n\
         logger.error(`Error fetching bike model: ${error.message}`);\n\
       }\n\
     }\n\
-    \n\
+    
     const newBill = new Bill(billData);\n\
     const savedBill = await newBill.save();\n\
     res.status(201).json(savedBill);\n\
