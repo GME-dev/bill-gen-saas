@@ -160,6 +160,10 @@ const BikeModelSchema = new mongoose.Schema({\n\
     required: [true, "Model name is required"],\n\
     trim: true\n\
   },\n\
+  model_name: {\n\
+    type: String,\n\
+    trim: true\n\
+  },\n\
   price: {\n\
     type: Number,\n\
     required: [true, "Price is required"]\n\
@@ -183,7 +187,27 @@ const BikeModelSchema = new mongoose.Schema({\n\
 }, {\n\
   timestamps: true,\n\
   versionKey: false,\n\
-  collection: "bike_models" // Set the collection name explicitly\n\
+  collection: "bike_models", // Set the collection name explicitly\n\
+  toJSON: {\n\
+    virtuals: true,\n\
+    transform: function(doc, ret) {\n\
+      ret.id = ret._id;\n\
+      ret.model_name = ret.name; // Map name to model_name for frontend compatibility\n\
+      delete ret._id;\n\
+      delete ret.__v;\n\
+      return ret;\n\
+    }\n\
+  }\n\
+});\n\
+\n\
+// Add middleware to sync name and model_name fields\n\
+BikeModelSchema.pre("save", function(next) {\n\
+  if (this.isModified("name")) {\n\
+    this.model_name = this.name;\n\
+  } else if (this.isModified("model_name")) {\n\
+    this.name = this.model_name;\n\
+  }\n\
+  next();\n\
 });\n\
 \n\
 module.exports = mongoose.model("BikeModel", BikeModelSchema);\n\
@@ -338,10 +362,18 @@ const port = process.env.PORT || 8080;\n\
 // Apply middlewares\n\
 app.use(helmet());\n\
 app.use(cors({\n\
-  origin: process.env.CORS_ORIGIN || "*",\n\
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(",") : "*",\n\
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],\n\
-  allowedHeaders: ["Content-Type", "Authorization"]\n\
+  allowedHeaders: ["Content-Type", "Authorization"],\n\
+  credentials: true\n\
 }));\n\
+\n\
+// Disable caching for all routes\n\
+app.use((req, res, next) => {\n\
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, private");\n\
+  next();\n\
+});\n\
+\n\
 app.use(express.json());\n\
 app.use(express.urlencoded({ extended: true }));\n\
 app.use(morgan("dev", {\n\
@@ -354,10 +386,11 @@ app.get("/api/health", (req, res) => {\n\
   res.status(200).json({ status: "ok" });\n\
 });\n\
 \n\
-// Bike Models routes\n\
+// Bike Models routes with enhanced logging\n\
 app.get("/api/bike-models", async (req, res) => {\n\
   try {\n\
     const bikeModels = await BikeModel.find().sort({ name: 1 });\n\
+    logger.info(`Found ${bikeModels.length} bike models:`, bikeModels);\n\
     res.status(200).json(bikeModels);\n\
   } catch (error) {\n\
     logger.error(`Error fetching bike models: ${error.message}`);\n\
@@ -690,7 +723,7 @@ module.exports = app;' > src/server.js
 RUN printf 'PORT=8080\n\
 NODE_ENV=production\n\
 MONGODB_URI=mongodb+srv://gunawardhanamotorsembilipitiya:0Mu8lMAFac5hMdcP@bill-gen-cluster.riyvl.mongodb.net/bill-gen?retryWrites=true&w=majority&appName=bill-gen-cluster\n\
-CORS_ORIGIN=https://bill-gen-saas.pages.dev' > .env
+CORS_ORIGIN=https://bill-gen-saas.pages.dev,https://web-production-0ed6.up.railway.app' > .env
 
 # Verify files
 RUN ls -la
