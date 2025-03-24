@@ -305,7 +305,7 @@ BillSchema.pre("save", async function(next) {\n\
 \n\
 module.exports = mongoose.model("Bill", BillSchema);' > src/models/Bill.js
 
-# Create server.js
+# Create server.js with updated bike models
 RUN printf 'require("dotenv").config();\n\
 const express = require("express");\n\
 const cors = require("cors");\n\
@@ -330,42 +330,42 @@ const connectToDatabase = async () => {\n\
     if (count === 0) {\n\
       const sampleBikes = [\n\
         {\n\
-          name: "Bajaj Pulsar NS160",\n\
+          name: "TMR-G18",\n\
           price: 499500,\n\
-          motor_number_prefix: "NS160",\n\
-          chassis_number_prefix: "PULS",\n\
+          motor_number_prefix: "G18",\n\
+          chassis_number_prefix: "G18",\n\
           is_ebicycle: false,\n\
           can_be_leased: true\n\
         },\n\
         {\n\
-          name: "Bajaj Discover 125",\n\
-          price: 349500,\n\
-          motor_number_prefix: "D125",\n\
-          chassis_number_prefix: "DISC",\n\
-          is_ebicycle: false,\n\
-          can_be_leased: true\n\
-        },\n\
-        {\n\
-          name: "TVS Apache RTR 160",\n\
+          name: "TMR-MNK3",\n\
           price: 475000,\n\
-          motor_number_prefix: "RTR160",\n\
-          chassis_number_prefix: "APACHE",\n\
+          motor_number_prefix: "MNK3",\n\
+          chassis_number_prefix: "MNK3",\n\
           is_ebicycle: false,\n\
           can_be_leased: true\n\
         },\n\
         {\n\
-          name: "Hero Splendor Plus",\n\
-          price: 249500,\n\
-          motor_number_prefix: "SPL",\n\
-          chassis_number_prefix: "SPLN",\n\
+          name: "TMR-G16",\n\
+          price: 449500,\n\
+          motor_number_prefix: "G16",\n\
+          chassis_number_prefix: "G16",\n\
           is_ebicycle: false,\n\
           can_be_leased: true\n\
         },\n\
         {\n\
-          name: "Honda CB Shine",\n\
-          price: 299500,\n\
-          motor_number_prefix: "CBS",\n\
-          chassis_number_prefix: "SHINE",\n\
+          name: "TMR-G15",\n\
+          price: 399500,\n\
+          motor_number_prefix: "G15",\n\
+          chassis_number_prefix: "G15",\n\
+          is_ebicycle: false,\n\
+          can_be_leased: true\n\
+        },\n\
+        {\n\
+          name: "TMR-G14",\n\
+          price: 349500,\n\
+          motor_number_prefix: "G14",\n\
+          chassis_number_prefix: "G14",\n\
           is_ebicycle: false,\n\
           can_be_leased: true\n\
         }\n\
