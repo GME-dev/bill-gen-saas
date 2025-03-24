@@ -151,42 +151,61 @@ exports.generatePDF = async (bill) => {\n\
   });\n\
 };' > src/services/pdfService.js
 
-# Create BikeModel.js with the correct collection name
-RUN echo 'const mongoose = require("mongoose");
-
-const BikeModelSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, "Model name is required"],
-    trim: true
-  },
-  price: {
-    type: Number,
-    required: [true, "Price is required"]
-  },
-  motor_number_prefix: {
-    type: String,
-    trim: true
-  },
-  chassis_number_prefix: {
-    type: String,
-    trim: true
-  },
-  is_ebicycle: {
-    type: Boolean,
-    default: false
-  },
-  can_be_leased: {
-    type: Boolean,
-    default: true
-  }
-}, {
-  timestamps: true,
-  versionKey: false,
-  collection: "bike_models" // Set the collection name explicitly to match MongoDB
-});
-
-module.exports = mongoose.model("BikeModel", BikeModelSchema);' > src/models/BikeModel.js
+# Create BikeModel schema
+RUN printf 'const mongoose = require("mongoose");\n\
+\n\
+const BikeModelSchema = new mongoose.Schema({\n\
+  name: {\n\
+    type: String,\n\
+    required: true,\n\
+    unique: true\n\
+  },\n\
+  make: {\n\
+    type: String,\n\
+    required: true\n\
+  },\n\
+  model: {\n\
+    type: String,\n\
+    required: true\n\
+  },\n\
+  year: {\n\
+    type: Number\n\
+  },\n\
+  price: {\n\
+    type: Number,\n\
+    required: true\n\
+  },\n\
+  description: String,\n\
+  specifications: {\n\
+    engine: String,\n\
+    power: String,\n\
+    transmission: String,\n\
+    features: [String]\n\
+  },\n\
+  status: {\n\
+    type: String,\n\
+    enum: ["available", "sold", "reserved"],\n\
+    default: "available"\n\
+  },\n\
+  images: [String],\n\
+  createdAt: {\n\
+    type: Date,\n\
+    default: Date.now\n\
+  },\n\
+  updatedAt: {\n\
+    type: Date,\n\
+    default: Date.now\n\
+  }\n\
+});\n\
+\n\
+// Add timestamps for tracking updates\n\
+BikeModelSchema.pre("save", function(next) {\n\
+  this.updatedAt = Date.now();\n\
+  next();\n\
+});\n\
+\n\
+module.exports = mongoose.model("BikeModel", BikeModelSchema);\n\
+' > src/models/BikeModel.js
 
 # Create Bill.js
 RUN printf 'const mongoose = require("mongoose");\n\
