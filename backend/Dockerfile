@@ -44,6 +44,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
+# Ensure dotenv is installed
+RUN npm install dotenv
+
 # Log the directory structure
 RUN ls -la
 RUN ls -la dist || echo "dist directory not found"
@@ -51,5 +54,5 @@ RUN ls -la dist || echo "dist directory not found"
 # Expose the port the app will run on
 EXPOSE 8080
 
-# Start the application
-CMD ["node", "-r", "dotenv/config", "dist/server.js"] 
+# Start the application without using the -r flag
+CMD ["node", "dist/server.js"] 
