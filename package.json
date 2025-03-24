@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
+    "mongodb": "^6.15.0",
+    "mongoose": "^8.12.2",
     "winston": "^3.17.0"
   },
   "devDependencies": {
+    "@types/mongodb": "^4.0.6",
+    "@types/mongoose": "^5.11.96",
     "@types/node": "^22.13.11",
     "@types/winston": "^2.4.4"
   }

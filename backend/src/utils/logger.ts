@@ -63,9 +63,9 @@ export const logger = winston.createLogger({
 
 // Export a simplified interface
 export default {
-  error: (message: string): void => logger.error(message),
-  warn: (message: string): void => logger.warn(message),
-  info: (message: string): void => logger.info(message),
-  http: (message: string): void => logger.http(message),
-  debug: (message: string): void => logger.debug(message),
+  error: (message: string) => logger.error(message),
+  warn: (message: string) => logger.warn(message),
+  info: (message: string) => logger.info(message),
+  http: (message: string) => logger.http(message),
+  debug: (message: string) => logger.debug(message),
 }; 

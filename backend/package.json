@@ -5,10 +5,10 @@
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
-    "start": "node dist/server.js",
+    "start": "node -r dotenv/config dist/server.js",
     "dev": "nodemon -r dotenv/config --exec \"node --loader ts-node/esm src/server.ts\"",
     "build": "tsc && npm run copy-assets",
-    "copy-assets": "mkdir -p dist/templates && cp -r src/templates/* dist/templates/ 2>/dev/null || true",
+    "copy-assets": "if not exist dist\\templates mkdir dist\\templates && if exist src\\templates\\* xcopy /y /s src\\templates\\* dist\\templates\\",
     "lint": "eslint . --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest"
