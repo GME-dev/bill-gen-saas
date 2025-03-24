@@ -32,12 +32,17 @@ const safeToString = (val) => {\n\
   return val.toString();\n\
 };\n\
 \n\
+// Format currency in LKR\n\
+const formatCurrency = (amount) => {\n\
+  return `${Number(amount).toLocaleString("en-LK")}/-`;\n\
+};\n\
+\n\
 // Function to generate PDF from bill data\n\
 exports.generatePDF = async (bill) => {\n\
   return new Promise((resolve, reject) => {\n\
     try {\n\
       // Create a new PDF document\n\
-      const doc = new PDFDocument({ margin: 50 });\n\
+      const doc = new PDFDocument({ margin: 50, size: "A4" });\n\
       \n\
       // Create buffer to store PDF\n\
       const buffers = [];\n\
@@ -48,99 +53,186 @@ exports.generatePDF = async (bill) => {\n\
       });\n\
       \n\
       // Header\n\
-      doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });\n\
-      doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });\n\
-      doc.fontSize(10).text("070 3131 899", { align: "center" });\n\
-      doc.moveDown();\n\
+      doc.fontSize(16).text("TMR TRADING LANKA (PVT) LTD", { align: "center" });\n\
+      doc.moveDown(0.5);\n\
+      doc.fontSize(12).text("GUNAWARDANA MOTORS, EMBILIPITIYA", { align: "left" });\n\
+      doc.text("AUTHORIZED DEALER - EMBILIPITIYA", { align: "left" });\n\
       \n\
-      // Invoice\n\
-      doc.fontSize(16).text(`Invoice: ${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });\n\
-      doc.moveDown();\n\
+      // Bill Number and Date - At the top right\n\
+      const billNumber = bill.billNumber || bill.bill_number || "N/A";\n\
+      doc.text(`Bill No: ${billNumber}`, 400, 50, { align: "right" });\n\
       \n\
-      // Customer Info\n\
-      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString()}`);\n\
-      doc.text(`Customer: ${bill.customerName || bill.customer_name || "N/A"}`);\n\
-      doc.text(`Phone: ${bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A"}`);\n\
-      if (bill.customer_address) {\n\
-        doc.text(`Address: ${bill.customer_address}`);\n\
-      }\n\
+      const today = new Date(bill.serviceDate || bill.date || Date.now());\n\
+      const formattedDate = `${today.getDate()}/${today.getMonth() + 1}/${today.getFullYear()}`;\n\
+      doc.text(`Date: ${formattedDate}`, 400, 70, { align: "right" });\n\
       \n\
-      // Bike Info\n\
-      doc.moveDown();\n\
-      if (bill.model_name) {\n\
-        doc.text(`Bike: ${bill.model_name || "N/A"}`);\n\
-        if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);\n\
-        if (bill.engine_number) doc.text(`Engine Number: ${bill.engine_number}`);\n\
-      } else if (bill.bikeInfo) {\n\
-        doc.text(`Bike: ${bill.bikeInfo.make || ""} ${bill.bikeInfo.model || ""}`);\n\
-        doc.text(`Registration Number: ${bill.bikeInfo.regNumber || "N/A"}`);\n\
-      }\n\
+      // Customer Details\n\
+      doc.moveDown(1.5);\n\
+      doc.fontSize(11).text("Customer Details:", { underline: true });\n\
+      doc.moveDown(0.5);\n\
+      doc.text(`Name: ${bill.customerName || bill.customer_name || "N/A"}`);\n\
+      doc.text(`NIC: ${bill.customer_nic || "N/A"}`);\n\
+      doc.text(`Address: ${bill.customer_address || "N/A"}`);\n\
       \n\
-      // Items Table\n\
-      doc.moveDown();\n\
-      doc.text("Description", 50, doc.y);\n\
-      doc.text("Qty", 300, doc.y, { width: 40, align: "center" });\n\
-      doc.text("Price", 350, doc.y, { width: 70, align: "right" });\n\
-      doc.text("Amount", 450, doc.y, { width: 70, align: "right" });\n\
+      // Vehicle Details\n\
+      doc.moveDown(1);\n\
+      doc.text("Vehicle Details:", { underline: true });\n\
+      doc.moveDown(0.5);\n\
+      doc.text(`Model: ${bill.model_name || "N/A"}`);\n\
+      if (bill.engine_number) doc.text(`Motor Number: ${bill.engine_number}`);\n\
+      if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);\n\
       \n\
-      doc.moveDown();\n\
-      let y = doc.y;\n\
+      // Determine if bike is e-bicycle\n\
+      const isEbicycle = bill.is_ebicycle || \n\
+                        bill.model_name?.includes("COLA5") || \n\
+                        bill.model_name?.includes("X01");\n\
       \n\
-      // Items\n\
-      if (bill.items && bill.items.length > 0) {\n\
-        bill.items.forEach(item => {\n\
-          doc.text(item.description || "Item", 50, y);\n\
-          doc.text(safeToString(item.quantity || 1), 300, y, { width: 40, align: "center" });\n\
-          doc.text(safeToString(item.rate || item.price || 0), 350, y, { width: 70, align: "right" });\n\
-          doc.text(safeToString(item.amount || item.total || 0), 450, y, { width: 70, align: "right" });\n\
-          y = doc.y + 15;\n\
-          doc.y = y;\n\
-        });\n\
+      // Payment Details\n\
+      doc.moveDown(1);\n\
+      doc.text("Payment Details:", { underline: true });\n\
+      doc.moveDown(0.5);\n\
+      \n\
+      // Create payment table\n\
+      const tableTop = doc.y;\n\
+      const tableLeft = 50;\n\
+      const colWidth = 170;\n\
+      const amountColWidth = 100;\n\
+      const rowHeight = 25;\n\
+      \n\
+      // Table headers\n\
+      doc.rect(tableLeft, tableTop, colWidth + amountColWidth, rowHeight).stroke();\n\
+      doc.text("Description", tableLeft + 10, tableTop + 8);\n\
+      doc.text("Amount (Rs.)", tableLeft + colWidth + 10, tableTop + 8);\n\
+      \n\
+      let currentY = tableTop + rowHeight;\n\
+      let totalAmount = 0;\n\
+      \n\
+      // Handle different bill types\n\
+      if (bill.bill_type === "leasing") {\n\
+        // Leasing bills - only for regular bikes\n\
+        const bikePrice = Number(bill.bike_price || bill.price || bill.subtotal || 0);\n\
+        const cpzAmount = isEbicycle ? 0 : 13500;\n\
+        const downPayment = Number(bill.down_payment || bill.advance || 0);\n\
+        \n\
+        // Bike Price\n\
+        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.text("Bike Price", tableLeft + 10, currentY + 8);\n\
+        doc.text(formatCurrency(bikePrice), tableLeft + colWidth + 10, currentY + 8);\n\
+        currentY += rowHeight;\n\
+        \n\
+        // CPZ Charge (if not e-bicycle)\n\
+        if (!isEbicycle) {\n\
+          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.text("CPZ Charge", tableLeft + 10, currentY + 8);\n\
+          doc.text(formatCurrency(cpzAmount), tableLeft + colWidth + 10, currentY + 8);\n\
+          currentY += rowHeight;\n\
+        }\n\
+        \n\
+        // Down Payment\n\
+        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.text("Down Payment", tableLeft + 10, currentY + 8);\n\
+        doc.text(formatCurrency(downPayment), tableLeft + colWidth + 10, currentY + 8);\n\
+        currentY += rowHeight;\n\
+        \n\
+        // For leasing, total amount is the down payment\n\
+        totalAmount = downPayment;\n\
+        \n\
+      } else if (bill.advance && Number(bill.advance) > 0) {\n\
+        // Advance Payment bill (either for cash or leasing)\n\
+        const bikePrice = Number(bill.bike_price || bill.price || bill.subtotal || 0);\n\
+        const rmvAmount = isEbicycle ? 0 : (bill.bill_type === "leasing" ? 13500 : 13000);\n\
+        const rmvLabel = bill.bill_type === "leasing" ? "CPZ Charge" : "RMV Charge";\n\
+        const advanceAmount = Number(bill.advance || 0);\n\
+        \n\
+        // Bike Price\n\
+        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.text("Bike Price", tableLeft + 10, currentY + 8);\n\
+        doc.text(formatCurrency(bikePrice), tableLeft + colWidth + 10, currentY + 8);\n\
+        currentY += rowHeight;\n\
+        \n\
+        // RMV/CPZ Charge (if not e-bicycle)\n\
+        if (!isEbicycle) {\n\
+          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.text(rmvLabel, tableLeft + 10, currentY + 8);\n\
+          doc.text(formatCurrency(rmvAmount), tableLeft + colWidth + 10, currentY + 8);\n\
+          currentY += rowHeight;\n\
+        }\n\
+        \n\
+        // If leasing, show down payment\n\
+        let fullAmount = bikePrice + rmvAmount;\n\
+        if (bill.bill_type === "leasing" && bill.down_payment) {\n\
+          const downPayment = Number(bill.down_payment || 0);\n\
+          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.text("Down Payment", tableLeft + 10, currentY + 8);\n\
+          doc.text(formatCurrency(downPayment), tableLeft + colWidth + 10, currentY + 8);\n\
+          currentY += rowHeight;\n\
+          fullAmount = downPayment; // For leasing, full amount is down payment\n\
+        }\n\
+        \n\
+        // Advance Amount\n\
+        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.text("Advance Amount", tableLeft + 10, currentY + 8);\n\
+        doc.text(formatCurrency(advanceAmount), tableLeft + colWidth + 10, currentY + 8);\n\
+        currentY += rowHeight;\n\
+        \n\
+        // Balance\n\
+        const balance = fullAmount - advanceAmount;\n\
+        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.text("Balance", tableLeft + 10, currentY + 8);\n\
+        doc.text(formatCurrency(balance), tableLeft + colWidth + 10, currentY + 8);\n\
+        currentY += rowHeight;\n\
+        \n\
+        // For advance payment, total is the full amount\n\
+        totalAmount = fullAmount;\n\
+        \n\
       } else {\n\
-        doc.text("Total Amount", 50, y);\n\
-        doc.text("1", 300, y, { width: 40, align: "center" });\n\
-        doc.text("", 350, y, { width: 70, align: "right" });\n\
-        doc.text(safeToString(bill.total || bill.amount || 0), 450, y, { width: 70, align: "right" });\n\
+        // Regular Cash bill\n\
+        const bikePrice = Number(bill.bike_price || bill.price || bill.subtotal || 0);\n\
+        const rmvAmount = isEbicycle ? 0 : 13000;\n\
+        \n\
+        // Bike Price\n\
+        doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+        doc.text("Bike Price", tableLeft + 10, currentY + 8);\n\
+        doc.text(formatCurrency(bikePrice), tableLeft + colWidth + 10, currentY + 8);\n\
+        currentY += rowHeight;\n\
+        \n\
+        // RMV Charge (if not e-bicycle)\n\
+        if (!isEbicycle) {\n\
+          doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+          doc.text("RMV Charge", tableLeft + 10, currentY + 8);\n\
+          doc.text(formatCurrency(rmvAmount), tableLeft + colWidth + 10, currentY + 8);\n\
+          currentY += rowHeight;\n\
+        }\n\
+        \n\
+        // For cash, total amount is bike price + RMV (if applicable)\n\
+        totalAmount = bikePrice + rmvAmount;\n\
       }\n\
       \n\
-      // Totals\n\
-      doc.moveDown();\n\
-      doc.text("Subtotal:", 350, doc.y, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 450, doc.y, { width: 70, align: "right" });\n\
+      // Total Amount\n\
+      doc.rect(tableLeft, currentY, colWidth + amountColWidth, rowHeight).stroke();\n\
+      doc.text("Total Amount", tableLeft + 10, currentY + 8, { bold: true });\n\
+      doc.text(formatCurrency(totalAmount), tableLeft + colWidth + 10, currentY + 8, { bold: true });\n\
       \n\
-      doc.text("Tax:", 350, doc.y + 20, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.tax || 0), 450, doc.y + 20, { width: 70, align: "right" });\n\
-      \n\
-      doc.text("Total:", 350, doc.y + 40, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 450, doc.y + 40, { width: 70, align: "right" });\n\
-      \n\
-      // Payment Info\n\
+      // Terms and Conditions\n\
       doc.moveDown(2);\n\
-      let status = "Unpaid";\n\
-      if (bill.isPaid || bill.paid || bill.status === "paid") {\n\
-        status = "Paid";\n\
-      } else if (bill.status) {\n\
-        status = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);\n\
-      }\n\
-      doc.text(`Payment Status: ${status}`);\n\
+      doc.fontSize(10).text("Terms and Conditions:", { underline: true });\n\
+      doc.moveDown(0.3);\n\
+      doc.text("1. All prices are inclusive of taxes.");\n\
+      doc.text("2. Warranty is subject to terms and conditions.");\n\
+      doc.text("3. This is a computer-generated bill.");\n\
+      doc.text("4. RMV registration will be completed within 30 days.");\n\
       \n\
-      if (bill.isPaid || bill.paid) {\n\
-        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`);\n\
-      } else if (bill.bill_type) {\n\
-        doc.text(`Bill Type: ${bill.bill_type}`);\n\
-      }\n\
+      // Signature\n\
+      doc.moveDown(2);\n\
+      doc.text("__________________________", 50, doc.y);\n\
+      doc.text("Dealer Signature", 50, doc.y + 5);\n\
       \n\
-      // Notes\n\
-      if (bill.notes || bill.remarks) {\n\
-        doc.moveDown();\n\
-        doc.text("Notes:");\n\
-        doc.text(bill.notes || bill.remarks);\n\
-      }\n\
+      doc.text("__________________________", 350, doc.y - 15);\n\
+      doc.text("Rubber Stamp", 350, doc.y + 5);\n\
       \n\
       // Footer\n\
-      doc.moveDown(2);\n\
+      doc.moveDown(1);\n\
       doc.fontSize(10).text("Thank you for your business!", { align: "center" });\n\
-      doc.text("Gunawardhana Motors, Embilipitiya | Tel: 070 3131 899", { align: "center" });\n\
       \n\
       // Finalize PDF\n\
       doc.end();\n\
@@ -261,9 +353,15 @@ const BillSchema = new mongoose.Schema({\n\
   customer_nic: String,    // Additional field for NIC\n\
   customer_address: String, // Additional field for address\n\
   bikeInfo: BikeInfoSchema,\n\
-  model_name: String,       // For alternative bike model reference\n\
+  model_name: String,       // For bike model reference\n\
   chassis_number: String,   // For bike identification\n\
   engine_number: String,    // For bike identification\n\
+  bike_price: Number,       // Price of the bike only\n\
+  is_ebicycle: Boolean,     // Whether this is an e-bicycle\n\
+  rmv_charge: Number,       // RMV charge for regular bikes (13,000)\n\
+  cpz_charge: Number,       // CPZ charge for leasing bikes (13,500)\n\
+  down_payment: Number,     // Down payment for leasing\n\
+  advance: Number,          // Advance payment amount\n\
   serviceDate: {\n\
     type: Date,\n\
     required: true,\n\
@@ -487,237 +585,135 @@ app.get("/api/bills/:id/pdf", async (req, res) => {\n\
 app.post("/api/bills", async (req, res) => {\n\
   try {\n\
     let billData = req.body;\n\
-    \n\
-    // Calculate totals if items are present\n\
-    if (req.body.items && Array.isArray(req.body.items)) {\n\
-      const subtotal = req.body.items.reduce(\n\
-        (sum, item) => sum + Number(item.amount || item.total || 0), \n\
-        0\n\
-      );\n\
-      const total = subtotal + Number(req.body.tax || 0);\n\
-      \n\
-      billData = {\n\
-        ...billData,\n\
-        subtotal,\n\
-        subTotal: subtotal, // For compatibility\n\
-        total,\n\
-        amount: total // For compatibility\n\
-      };\n\
-    }\n\
-    \n\
-    // Handle field compatibility\n\
-    if (billData.customer_name && !billData.customerName) {\n\
-      billData.customerName = billData.customer_name;\n\
-    }\n\
-    if (billData.customer_phone && !billData.customerPhone) {\n\
-      billData.customerPhone = billData.customer_phone;\n\
-    }\n\
-    if (billData.bill_type === "cash" && !billData.isPaid) {\n\
-      billData.isPaid = true;\n\
-      billData.paymentMethod = "cash";\n\
-    }\n\
-    \n\
-    const newBill = new Bill(billData);\n\
-    const savedBill = await newBill.save();\n\
-    res.status(201).json(savedBill);\n\
-  } catch (error) {\n\
-    logger.error(`Error creating bill: ${error.message}`);\n\
-    res.status(400).json({ error: error.message });\n\
-  }\n\
-});\n\
-\n\
-// Update bill\n\
-app.put("/api/bills/:id", async (req, res) => {\n\
-  try {\n\
-    let updateData = req.body;\n\
-    \n\
-    // Calculate totals if items are updated\n\
-    if (req.body.items && Array.isArray(req.body.items)) {\n\
-      const subtotal = req.body.items.reduce(\n\
-        (sum, item) => sum + Number(item.amount || item.total || 0),\n\
-        0\n\
-      );\n\
-      const total = subtotal + Number(req.body.tax || 0);\n\
-      \n\
-      updateData = {\n\
-        ...updateData,\n\
-        subtotal,\n\
-        subTotal: subtotal, // For compatibility\n\
-        total,\n\
-        amount: total // For compatibility\n\
-      };\n\
-    }\n\
-    \n\
-    // Handle field compatibility\n\
-    if (updateData.customer_name && !updateData.customerName) {\n\
-      updateData.customerName = updateData.customer_name;\n\
-    }\n\
-    if (updateData.customer_phone && !updateData.customerPhone) {\n\
-      updateData.customerPhone = updateData.customer_phone;\n\
-    }\n\
-    \n\
-    const updatedBill = await Bill.findByIdAndUpdate(\n\
-      req.params.id,\n\
-      updateData,\n\
-      { new: true, runValidators: true }\n\
-    );\n\
-    \n\
-    if (!updatedBill) {\n\
-      return res.status(404).json({ error: "Bill not found" });\n\
-    }\n\
-    \n\
-    res.status(200).json(updatedBill);\n\
-  } catch (error) {\n\
-    logger.error(`Error updating bill: ${error.message}`);\n\
-    res.status(400).json({ error: error.message });\n\
-  }\n\
-});\n\
-\n\
-// Update bill status\n\
-app.patch("/api/bills/:id/status", async (req, res) => {\n\
-  try {\n\
-    const { status } = req.body;\n\
-    if (!status) {\n\
-      return res.status(400).json({ error: "Status is required" });\n\
-    }\n\
-    \n\
-    // Handle different status types\n\
-    let updateData = { status };\n\
-    \n\
-    if (status === "paid") {\n\
-      updateData.isPaid = true;\n\
-      updateData.paid = true;\n\
-      updateData.paymentMethod = req.body.paymentMethod || "cash";\n\
-    } else if (status === "cancelled") {\n\
-      updateData.isPaid = false;\n\
-      updateData.paid = false;\n\
-    }\n\
-    \n\
-    const updatedBill = await Bill.findByIdAndUpdate(\n\
-      req.params.id,\n\
-      updateData,\n\
-      { new: true }\n\
-    );\n\
-    \n\
-    if (!updatedBill) {\n\
-      return res.status(404).json({ error: "Bill not found" });\n\
-    }\n\
-    \n\
-    res.status(200).json(updatedBill);\n\
-  } catch (error) {\n\
-    logger.error(`Error updating bill status: ${error.message}`);\n\
-    res.status(400).json({ error: error.message });\n\
-  }\n\
-});\n\
-\n\
-// Convert bill to leasing\n\
-app.put("/api/bills/:id/convert-to-leasing", async (req, res) => {\n\
-  try {\n\
-    const updateData = {\n\
-      ...req.body,\n\
-      status: "leasing",\n\
-      bill_type: "leasing",\n\
-      paymentMethod: "leasing",\n\
-      isPaid: false,\n\
-      paid: false\n\
-    };\n\
-    \n\
-    const updatedBill = await Bill.findByIdAndUpdate(\n\
-      req.params.id,\n\
-      updateData,\n\
-      { new: true, runValidators: true }\n\
-    );\n\
-    \n\
-    if (!updatedBill) {\n\
-      return res.status(404).json({ error: "Bill not found" });\n\
-    }\n\
-    \n\
-    res.status(200).json(updatedBill);\n\
-  } catch (error) {\n\
-    logger.error(`Error converting bill to leasing: ${error.message}`);\n\
-    res.status(400).json({ error: error.message });\n\
-  }\n\
-});\n\
-\n\
-// Delete bill\n\
-app.delete("/api/bills/:id", async (req, res) => {\n\
-  try {\n\
-    const bill = await Bill.findByIdAndDelete(req.params.id);\n\
-    if (!bill) {\n\
-      return res.status(404).json({ error: "Bill not found" });\n\
-    }\n\
-    res.status(200).json({ message: "Bill deleted successfully" });\n\
-  } catch (error) {\n\
-    logger.error(`Error deleting bill: ${error.message}`);\n\
-    res.status(500).json({ error: error.message });\n\
-  }\n\
-});\n\
-\n\
-// Mark bill as paid\n\
-app.patch("/api/bills/:id/pay", async (req, res) => {\n\
-  try {\n\
-    const { paymentMethod } = req.body;\n\
-    if (!paymentMethod) {\n\
-      return res.status(400).json({ error: "Payment method is required" });\n\
-    }\n\
-    \n\
-    const updatedBill = await Bill.findByIdAndUpdate(\n\
-      req.params.id,\n\
-      { \n\
-        isPaid: true,\n\
-        paid: true,\n\
-        status: "paid",\n\
-        paymentMethod,\n\
-        bill_type: paymentMethod\n\
-      },\n\
-      { new: true }\n\
-    );\n\
-    \n\
-    if (!updatedBill) {\n\
-      return res.status(404).json({ error: "Bill not found" });\n\
-    }\n\
-    \n\
-    res.status(200).json(updatedBill);\n\
-  } catch (error) {\n\
-    logger.error(`Error marking bill as paid: ${error.message}`);\n\
-    res.status(400).json({ error: error.message });\n\
-  }\n\
-});\n\
-\n\
-// Start server\n\
-const server = app.listen(port, async () => {\n\
-  try {\n\
-    // Connect to database\n\
-    await connectToDatabase();\n\
-    logger.info(`Server running in ${process.env.NODE_ENV || "development"} mode on port ${port}`);\n\
-  } catch (error) {\n\
-    logger.error(`Failed to start server: ${error.message}`);\n\
-    setTimeout(() => {\n\
-      process.exit(1);\n\
-    }, 1000);\n\
-  }\n\
-});\n\
-\n\
-// Graceful shutdown\n\
-process.on("SIGTERM", () => {\n\
-  logger.info("SIGTERM signal received");\n\
-  server.close(() => {\n\
-    logger.info("HTTP server closed");\n\
-    mongoose.connection.close();\n\
-    process.exit(0);\n\
-  });\n\
-});\n\
-\n\
-process.on("SIGINT", () => {\n\
-  logger.info("SIGINT signal received");\n\
-  server.close(() => {\n\
-    logger.info("HTTP server closed");\n\
-    mongoose.connection.close();\n\
-    process.exit(0);\n\
-  });\n\
-});\n\
-\n\
-module.exports = app;' > src/server.js
+    
+    // Determine if bike is e-bicycle
+    const isEbicycle = billData.is_ebicycle || 
+                      billData.model_name?.includes("COLA5") || 
+                      billData.model_name?.includes("X01");
+    
+    // Set bike price
+    const bikePrice = Number(billData.bike_price || billData.price || billData.subtotal || 0);
+    
+    // Calculate RMV/CPZ charges
+    const rmvCharge = isEbicycle ? 0 : 13000;
+    const cpzCharge = isEbicycle ? 0 : 13500;
+    
+    // Handle different bill types
+    if (billData.bill_type === "leasing") {
+      // For leasing, total is down payment
+      const downPayment = Number(billData.down_payment || 0);
+      
+      billData = {
+        ...billData,
+        is_ebicycle: isEbicycle,
+        bike_price: bikePrice,
+        cpz_charge: cpzCharge,
+        down_payment: downPayment,
+        subtotal: bikePrice,
+        total: downPayment, // For leasing, total is the down payment
+        customerPhone: billData.customer_phone || billData.customer_nic || "",
+        customerName: billData.customer_name || billData.customerName || "",
+        isPaid: false,
+        status: "leasing",
+        paymentMethod: "leasing"
+      };
+      
+    } else if (billData.advance && Number(billData.advance) > 0) {
+      // For advance payment
+      const advanceAmount = Number(billData.advance || 0);
+      let fullAmount = bikePrice;
+      
+      if (billData.bill_type === "leasing") {
+        // For leasing advance, total is down payment
+        const downPayment = Number(billData.down_payment || 0);
+        fullAmount = downPayment;
+        billData.cpz_charge = cpzCharge;
+      } else {
+        // For cash advance, total is bike price + RMV
+        fullAmount = bikePrice + rmvCharge;
+        billData.rmv_charge = rmvCharge;
+      }
+      
+      // Calculate balance
+      const balance = fullAmount - advanceAmount;
+      
+      billData = {
+        ...billData,
+        is_ebicycle: isEbicycle,
+        bike_price: bikePrice,
+        advance: advanceAmount,
+        subtotal: bikePrice,
+        total: fullAmount,
+        balance: balance,
+        customerPhone: billData.customer_phone || billData.customer_nic || "",
+        customerName: billData.customer_name || billData.customerName || "",
+        isPaid: false,
+        status: "pending"
+      };
+      
+    } else {
+      // Regular cash bill
+      const totalAmount = bikePrice + (isEbicycle ? 0 : rmvCharge);
+      
+      billData = {
+        ...billData,
+        is_ebicycle: isEbicycle,
+        bike_price: bikePrice,
+        rmv_charge: rmvCharge,
+        subtotal: bikePrice,
+        total: totalAmount,
+        customerPhone: billData.customer_phone || billData.customer_nic || "",
+        customerName: billData.customer_name || billData.customerName || "",
+        isPaid: billData.bill_type === "cash",
+        status: billData.bill_type === "cash" ? "paid" : "pending",
+        paymentMethod: billData.bill_type === "cash" ? "cash" : billData.paymentMethod || "pending"
+      };
+    }
+    
+    // Get bike model details if not provided
+    if (billData.model_name && !billData.bike_price) {
+      try {
+        const bikeModel = await BikeModel.findOne({ 
+          $or: [
+            { name: billData.model_name },
+            { model_name: billData.model_name }
+          ]
+        });
+        if (bikeModel) {
+          billData.bike_price = bikeModel.price;
+          billData.is_ebicycle = bikeModel.is_ebicycle;
+          
+          // Recalculate total
+          if (billData.bill_type === "leasing") {
+            // No changes needed, total is already set to down payment
+          } else if (billData.advance && Number(billData.advance) > 0) {
+            if (billData.bill_type === "leasing") {
+              // Balance calculation already handled
+            } else {
+              // Cash with advance
+              const rmvCharge = billData.is_ebicycle ? 0 : 13000;
+              billData.total = billData.bike_price + rmvCharge;
+              billData.balance = billData.total - billData.advance;
+            }
+          } else {
+            // Regular cash bill
+            const rmvCharge = billData.is_ebicycle ? 0 : 13000;
+            billData.total = billData.bike_price + rmvCharge;
+          }
+        }
+      } catch (error) {
+        logger.error(`Error fetching bike model: ${error.message}`);
+      }
+    }
+    
+    const newBill = new Bill(billData);
+    const savedBill = await newBill.save();
+    res.status(201).json(savedBill);
+  } catch (error) {
+    logger.error(`Error creating bill: ${error.message}`);
+    res.status(400).json({ error: error.message });
+  }
+});
 
 # Create .env file
 RUN printf 'PORT=8080\n\
