@@ -53,27 +53,13 @@ app.get("/api/health", (req, res) => {\n\
   res.status(200).json({ status: "ok" });\n\
 });\n\
 \n\
-// Sample data\n\
-const sampleBills = [\n\
-  { id: "1", customerName: "John Doe", bikeModel: "Honda CB150R", total: 25000, date: "2023-01-15" },\n\
-  { id: "2", customerName: "Jane Smith", bikeModel: "Yamaha R15", total: 18000, date: "2023-02-20" },\n\
-  { id: "3", customerName: "Bob Johnson", bikeModel: "Bajaj Pulsar", total: 12000, date: "2023-03-10" }\n\
-];\n\
-\n\
-const sampleBikeModels = [\n\
-  { id: "1", name: "Honda CB150R", price: 250000, brand: "Honda" },\n\
-  { id: "2", name: "Yamaha R15", price: 180000, brand: "Yamaha" },\n\
-  { id: "3", name: "Bajaj Pulsar", price: 120000, brand: "Bajaj" },\n\
-  { id: "4", name: "TVS Apache", price: 140000, brand: "TVS" }\n\
-];\n\
-\n\
-// API routes - Return direct arrays to fix frontend map() function\n\
+// Respond with an empty array for now to avoid frontend errors\n\
 app.get("/api/bills", (req, res) => {\n\
-  res.status(200).json(sampleBills);\n\
+  res.status(200).json([]);\n\
 });\n\
 \n\
 app.get("/api/bike-models", (req, res) => {\n\
-  res.status(200).json(sampleBikeModels);\n\
+  res.status(200).json([]);\n\
 });\n\
 \n\
 // Start server\n\
