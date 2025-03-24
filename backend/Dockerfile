@@ -312,151 +312,150 @@ exports.generatePDF = async (bill) => {\n\
 };' > src/services/pdfService.js
 
 # Create BikeModel schema
-RUN printf 'const mongoose = require("mongoose");\n\
-\n\
-const BikeModelSchema = new mongoose.Schema({\n\
-  name: {\n\
-    type: String,\n\
-    required: [true, "Model name is required"],\n\
-    trim: true\n\
-  },\n\
-  model_name: {\n\
-    type: String,\n\
-    trim: true\n\
-  },\n\
-  price: {\n\
-    type: Number,\n\
-    required: [true, "Price is required"]\n\
-  },\n\
-  motor_number_prefix: {\n\
-    type: String,\n\
-    trim: true\n\
-  },\n\
-  chassis_number_prefix: {\n\
-    type: String,\n\
-    trim: true\n\
-  },\n\
-  is_ebicycle: {\n\
-    type: Boolean,\n\
-    default: false\n\
-  },\n\
-  can_be_leased: {\n\
-    type: Boolean,\n\
-    default: true\n\
-  }\n\
-}, {\n\
-  timestamps: true,\n\
-  versionKey: false,\n\
-  collection: "bike_models", // Set the collection name explicitly\n\
-  toJSON: {\n\
-    virtuals: true,\n\
-    transform: function(doc, ret) {\n\
-      ret.id = ret._id;\n\
-      ret.model_name = ret.name; // Map name to model_name for frontend compatibility\n\
-      delete ret._id;\n\
-      delete ret.__v;\n\
-      return ret;\n\
-    }\n\
-  }\n\
-});\n\
-\n\
-// Add middleware to sync name and model_name fields\n\
-BikeModelSchema.pre("save", function(next) {\n\
-  if (this.isModified("name")) {\n\
-    this.model_name = this.name;\n\
-  } else if (this.isModified("model_name")) {\n\
-    this.name = this.model_name;\n\
-  }\n\
-  next();\n\
-});\n\
-\n\
-module.exports = mongoose.model("BikeModel", BikeModelSchema);\n\
-' > src/models/BikeModel.js
+RUN echo 'const mongoose = require("mongoose");
+
+const BikeModelSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: [true, "Model name is required"],
+    trim: true
+  },
+  model_name: {
+    type: String,
+    trim: true
+  },
+  price: {
+    type: Number,
+    required: [true, "Price is required"]
+  },
+  motor_number_prefix: {
+    type: String,
+    trim: true
+  },
+  chassis_number_prefix: {
+    type: String,
+    trim: true
+  },
+  is_ebicycle: {
+    type: Boolean,
+    default: false
+  },
+  can_be_leased: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true,
+  versionKey: false,
+  collection: "bike_models", // Set the collection name explicitly
+  toJSON: {
+    virtuals: true,
+    transform: function(doc, ret) {
+      ret.id = ret._id;
+      ret.model_name = ret.name; // Map name to model_name for frontend compatibility
+      delete ret._id;
+      delete ret.__v;
+      return ret;
+    }
+  }
+});
+
+// Add middleware to sync name and model_name fields
+BikeModelSchema.pre("save", function(next) {
+  if (this.isModified("name")) {
+    this.model_name = this.name;
+  } else if (this.isModified("model_name")) {
+    this.name = this.model_name;
+  }
+  next();
+});
+
+module.exports = mongoose.model("BikeModel", BikeModelSchema);' > src/models/BikeModel.js
 
 # Create src/models/Bill.js with proper schema definition
-RUN printf 'const mongoose = require("mongoose");\n\
-\n\
-const BillSchema = new mongoose.Schema(\n\
-  {\n\
-    bill_type: {\n\
-      type: String,\n\
-      enum: ["cash", "leasing", "advance"],\n\
-      required: [true, "Bill type is required"],\n\
-    },\n\
-    bill_status: {\n\
-      type: String,\n\
-      enum: ["pending", "paid", "cancelled"],\n\
-      default: "pending",\n\
-    },\n\
-    billNumber: {\n\
-      type: String,\n\
-      // Generate a unique bill number with date and random component\n\
-      default: function() {\n\
-        const date = new Date();\n\
-        const year = date.getFullYear();\n\
-        const month = String(date.getMonth() + 1).padStart(2, "0");\n\
-        const day = String(date.getDate()).padStart(2, "0");\n\
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");\n\
-        return `TMR-${year}${month}${day}-${random}`;\n\
-      },\n\
-    },\n\
-    bill_number: String, // For backward compatibility\n\
-    date: {\n\
-      type: Date,\n\
-      default: Date.now,\n\
-    },\n\
-    customerName: String,\n\
-    customer_name: String,\n\
-    customer_nic: String,\n\
-    customer_address: String,\n\
-    customer_phone: String,\n\
-    model_name: String,\n\
-    bike_price: Number,\n\
-    is_ebicycle: {\n\
-      type: Boolean,\n\
-      default: false,\n\
-    },\n\
-    price: Number,\n\
-    subtotal: Number,\n\
-    advance: Number,\n\
-    down_payment: Number,\n\
-    engine_number: String,\n\
-    chassis_number: String,\n\
-    serviceDate: Date,\n\
-    leasing_company: String,\n\
-    leasing_amount: Number,\n\
-  },\n\
-  { timestamps: true }\n\
-);\n\
-\n\
-// Ensure billNumber and bill_number sync and are never null\n\
-BillSchema.pre("save", function (next) {\n\
-  // Make sure billNumber is set\n\
-  if (!this.billNumber) {\n\
-    const date = new Date();\n\
-    const year = date.getFullYear();\n\
-    const month = String(date.getMonth() + 1).padStart(2, "0");\n\
-    const day = String(date.getDate()).padStart(2, "0");\n\
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");\n\
-    this.billNumber = `TMR-${year}${month}${day}-${random}`;\n\
-  }\n\
-  \n\
-  // Sync bill_number for backward compatibility\n\
-  this.bill_number = this.billNumber;\n\
-  \n\
-  // Auto-detect e-bicycle based on model name\n\
-  if (this.model_name && (this.model_name.includes("COLA5") || this.model_name.includes("X01"))) {\n\
-    this.is_ebicycle = true;\n\
-  }\n\
-  \n\
-  next();\n\
-});\n\
-\n\
-// Index
-BillSchema.index({ billNumber: 1 });\n\
-\n\
-const Bill = mongoose.model("Bill", BillSchema, "bills");\n\
-\n\
+RUN echo 'const mongoose = require("mongoose");
+
+const BillSchema = new mongoose.Schema(
+  {
+    bill_type: {
+      type: String,
+      enum: ["cash", "leasing", "advance"],
+      required: [true, "Bill type is required"],
+    },
+    bill_status: {
+      type: String,
+      enum: ["pending", "paid", "cancelled"],
+      default: "pending",
+    },
+    billNumber: {
+      type: String,
+      // Generate a unique bill number with date and random component
+      default: function() {
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+        return `TMR-${year}${month}${day}-${random}`;
+      },
+    },
+    bill_number: String, // For backward compatibility
+    date: {
+      type: Date,
+      default: Date.now,
+    },
+    customerName: String,
+    customer_name: String,
+    customer_nic: String,
+    customer_address: String,
+    customer_phone: String,
+    model_name: String,
+    bike_price: Number,
+    is_ebicycle: {
+      type: Boolean,
+      default: false,
+    },
+    price: Number,
+    subtotal: Number,
+    advance: Number,
+    down_payment: Number,
+    engine_number: String,
+    chassis_number: String,
+    serviceDate: Date,
+    leasing_company: String,
+    leasing_amount: Number,
+  },
+  { timestamps: true }
+);
+
+// Ensure billNumber and bill_number sync and are never null
+BillSchema.pre("save", function (next) {
+  // Make sure billNumber is set
+  if (!this.billNumber) {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+    this.billNumber = `TMR-${year}${month}${day}-${random}`;
+  }
+  
+  // Sync bill_number for backward compatibility
+  this.bill_number = this.billNumber;
+  
+  // Auto-detect e-bicycle based on model name
+  if (this.model_name && (this.model_name.includes("COLA5") || this.model_name.includes("X01"))) {
+    this.is_ebicycle = true;
+  }
+  
+  next();
+});
+
+// Create index separately to avoid Docker parsing issues
+BillSchema.index({billNumber: 1});
+
+const Bill = mongoose.model("Bill", BillSchema, "bills");
+
 module.exports = Bill;' > src/models/Bill.js
 
 # Create server.js - this needs to be properly enclosed in a RUN command
