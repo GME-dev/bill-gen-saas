@@ -38,8 +38,8 @@ const safeToString = (val) => {\n\
 exports.generatePDF = async (bill) => {\n\
   return new Promise((resolve, reject) => {\n\
     try {\n\
-      // Create a new PDF document\n\
-      const doc = new PDFDocument({ margin: 50 });\n\
+      // Create a new PDF document with better margins\n\
+      const doc = new PDFDocument({ margin: 50, size: "A4" });\n\
       \n\
       // Create buffer to store PDF\n\
       const buffers = [];\n\
@@ -49,105 +49,196 @@ exports.generatePDF = async (bill) => {\n\
         resolve(pdfData);\n\
       });\n\
       \n\
-      // Add content to PDF\n\
+      // Add a border to the page\n\
+      doc.rect(15, 15, doc.page.width - 30, doc.page.height - 30).stroke();\n\
+      \n\
+      // Add content to PDF with improved styling\n\
       // Header\n\
-      doc.fontSize(20).text("GUNAWARDHANA MOTORS", { align: "center" });\n\
-      doc.fontSize(14).text("EMBILIPITIYA", { align: "center" });\n\
-      doc.moveDown();\n\
-      doc.fontSize(16).text(`Invoice: ${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });\n\
-      doc.moveDown();\n\
-      \n\
-      // Customer Information\n\
-      doc.fontSize(12).text(`Date: ${new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString()}`);\n\
-      doc.text(`Customer: ${bill.customerName || bill.customer_name || "N/A"}`);\n\
-      doc.text(`Phone: ${bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A"}`);\n\
-      if (bill.customer_address) {\n\
-        doc.text(`Address: ${bill.customer_address}`);\n\
-      }\n\
+      doc.fontSize(22).font("Helvetica-Bold").text("GUNAWARDHANA MOTORS", { align: "center" });\n\
+      doc.fontSize(16).font("Helvetica").text("EMBILIPITIYA", { align: "center" });\n\
+      doc.fontSize(12).text("070 3131 899", { align: "center" });\n\
       doc.moveDown();\n\
       \n\
-      // Bike Information\n\
-      if (bill.bikeInfo) {\n\
-        doc.text(`Bike: ${bill.bikeInfo.make || "N/A"} ${bill.bikeInfo.model || "N/A"}`);\n\
-        doc.text(`Registration Number: ${bill.bikeInfo.regNumber || "N/A"}`);\n\
-      } else if (bill.model_name) {\n\
-        doc.text(`Bike Model: ${bill.model_name || "N/A"}`);\n\
-        if (bill.chassis_number) doc.text(`Chassis Number: ${bill.chassis_number}`);\n\
-        if (bill.engine_number) doc.text(`Engine Number: ${bill.engine_number}`);\n\
-      }\n\
+      // Draw a separator line\n\
+      doc.moveTo(50, doc.y).lineTo(doc.page.width - 50, doc.y).stroke();\n\
+      doc.moveDown(0.5);\n\
+      \n\
+      // Bill number with improved styling\n\
+      doc.fontSize(16).font("Helvetica-Bold").text(`INVOICE`, { align: "center" });\n\
+      doc.fontSize(14).text(`#${bill.billNumber || bill.bill_number || "N/A"}`, { align: "center" });\n\
       doc.moveDown();\n\
       \n\
-      // Items Table Headers\n\
-      doc.font("Helvetica-Bold");\n\
-      const tableTop = doc.y;\n\
-      doc.text("Description", 50, tableTop);\n\
-      doc.text("Qty", 280, tableTop, { width: 40, align: "right" });\n\
-      doc.text("Rate", 330, tableTop, { width: 70, align: "right" });\n\
-      doc.text("Amount", 430, tableTop, { width: 70, align: "right" });\n\
-      doc.moveDown();\n\
+      // Left and right columns for date and customer info\n\
+      const startY = doc.y;\n\
       \n\
-      // Items\n\
-      doc.font("Helvetica");\n\
-      let itemY = doc.y;\n\
+      // Left column - Date information\n\
+      doc.font("Helvetica-Bold").fontSize(12).text("Date:", 50, startY);\n\
+      doc.font("Helvetica").text(new Date(bill.serviceDate || bill.date || Date.now()).toLocaleDateString(), 120, startY);\n\
       \n\
-      if (bill.items && bill.items.length > 0) {\n\
-        bill.items.forEach(item => {\n\
-          doc.text(item.description || "Item", 50, itemY);\n\
-          doc.text(safeToString(item.quantity || 1), 280, itemY, { width: 40, align: "right" });\n\
-          doc.text(safeToString(item.rate || item.price || 0), 330, itemY, { width: 70, align: "right" });\n\
-          doc.text(safeToString(item.amount || item.total || 0), 430, itemY, { width: 70, align: "right" });\n\
-          itemY = doc.y + 15;\n\
-          doc.y = itemY;\n\
-        });\n\
-      } else {\n\
-        // Handle case where there are no items or items is in a different format\n\
-        doc.text("Total Amount", 50, itemY);\n\
-        doc.text("1", 280, itemY, { width: 40, align: "right" });\n\
-        doc.text(safeToString(bill.total || bill.amount || 0), 430, itemY, { width: 70, align: "right" });\n\
-      }\n\
-      \n\
-      doc.moveDown();\n\
-      \n\
-      // Totals\n\
-      const totalsY = doc.y + 10;\n\
-      doc.text("Subtotal:", 330, totalsY, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 430, totalsY, { width: 70, align: "right" });\n\
-      \n\
-      doc.text("Tax:", 330, totalsY + 20, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.tax || 0), 430, totalsY + 20, { width: 70, align: "right" });\n\
-      \n\
-      doc.font("Helvetica-Bold");\n\
-      doc.text("Total:", 330, totalsY + 40, { width: 70, align: "right" });\n\
-      doc.text(safeToString(bill.total || bill.amount || 0), 430, totalsY + 40, { width: 70, align: "right" });\n\
-      \n\
-      // Payment Status\n\
-      doc.moveDown(2);\n\
-      doc.font("Helvetica");\n\
+      // Right column - Invoice status\n\
       let paymentStatus = "Unpaid";\n\
       if (bill.isPaid || bill.paid || bill.status === "paid") {\n\
         paymentStatus = "Paid";\n\
       } else if (bill.status) {\n\
         paymentStatus = bill.status.charAt(0).toUpperCase() + bill.status.slice(1);\n\
       }\n\
-      doc.text(`Payment Status: ${paymentStatus}`);\n\
       \n\
-      if (bill.isPaid || bill.paid) {\n\
-        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`);\n\
-      } else if (bill.bill_type) {\n\
-        doc.text(`Bill Type: ${bill.bill_type}`);\n\
+      // Status with color coding\n\
+      doc.font("Helvetica-Bold").text("Status:", 400, startY);\n\
+      if (paymentStatus === "Paid") {\n\
+        doc.fillColor("green").font("Helvetica").text(paymentStatus, 450, startY);\n\
+      } else if (paymentStatus === "Leasing") {\n\
+        doc.fillColor("blue").font("Helvetica").text(paymentStatus, 450, startY);\n\
+      } else {\n\
+        doc.fillColor("red").font("Helvetica").text(paymentStatus, 450, startY);\n\
+      }\n\
+      doc.fillColor("black"); // Reset color\n\
+      \n\
+      // Customer Information section\n\
+      doc.moveDown(1.5);\n\
+      doc.font("Helvetica-Bold").fontSize(14).text("Customer Information", 50);\n\
+      doc.moveDown(0.5);\n\
+      \n\
+      // Customer details\n\
+      const customerY = doc.y;\n\
+      doc.font("Helvetica-Bold").fontSize(12).text("Name:", 50, customerY);\n\
+      doc.font("Helvetica").text(bill.customerName || bill.customer_name || "N/A", 150, customerY);\n\
+      \n\
+      doc.font("Helvetica-Bold").text("Phone:", 50, customerY + 20);\n\
+      doc.font("Helvetica").text(bill.customerPhone || bill.customer_phone || bill.customer_nic || "N/A", 150, customerY + 20);\n\
+      \n\
+      if (bill.customer_nic) {\n\
+        doc.font("Helvetica-Bold").text("NIC:", 50, customerY + 40);\n\
+        doc.font("Helvetica").text(bill.customer_nic, 150, customerY + 40);\n\
+      }\n\
+      \n\
+      if (bill.customer_address) {\n\
+        const addressY = bill.customer_nic ? customerY + 60 : customerY + 40;\n\
+        doc.font("Helvetica-Bold").text("Address:", 50, addressY);\n\
+        doc.font("Helvetica").text(bill.customer_address, 150, addressY);\n\
+      }\n\
+      \n\
+      // Bike Information\n\
+      doc.moveDown(3);\n\
+      doc.font("Helvetica-Bold").fontSize(14).text("Bike Information", 50);\n\
+      doc.moveDown(0.5);\n\
+      \n\
+      const bikeY = doc.y;\n\
+      \n\
+      if (bill.bikeInfo) {\n\
+        doc.font("Helvetica-Bold").fontSize(12).text("Make/Model:", 50, bikeY);\n\
+        doc.font("Helvetica").text(`${bill.bikeInfo.make || "N/A"} ${bill.bikeInfo.model || "N/A"}`, 150, bikeY);\n\
+        \n\
+        doc.font("Helvetica-Bold").text("Reg Number:", 50, bikeY + 20);\n\
+        doc.font("Helvetica").text(bill.bikeInfo.regNumber || "N/A", 150, bikeY + 20);\n\
+      } else if (bill.model_name) {\n\
+        doc.font("Helvetica-Bold").fontSize(12).text("Model:", 50, bikeY);\n\
+        doc.font("Helvetica").text(bill.model_name || "N/A", 150, bikeY);\n\
+        \n\
+        let offset = 0;\n\
+        if (bill.chassis_number) {\n\
+          doc.font("Helvetica-Bold").text("Chassis No:", 50, bikeY + 20);\n\
+          doc.font("Helvetica").text(bill.chassis_number, 150, bikeY + 20);\n\
+          offset = 20;\n\
+        }\n\
+        \n\
+        if (bill.engine_number) {\n\
+          doc.font("Helvetica-Bold").text("Engine No:", 50, bikeY + 20 + offset);\n\
+          doc.font("Helvetica").text(bill.engine_number, 150, bikeY + 20 + offset);\n\
+        }\n\
+      }\n\
+      \n\
+      // Invoice Items\n\
+      doc.moveDown(4);\n\
+      doc.font("Helvetica-Bold").fontSize(14).text("Invoice Items", 50);\n\
+      doc.moveDown(0.5);\n\
+      \n\
+      // Draw table header with background\n\
+      const tableTop = doc.y;\n\
+      doc.rect(50, tableTop, doc.page.width - 100, 20).fill("#e6e6e6");\n\
+      \n\
+      // Table headers\n\
+      doc.fillColor("black");\n\
+      doc.font("Helvetica-Bold").fontSize(12);\n\
+      doc.text("Description", 60, tableTop + 5);\n\
+      doc.text("Qty", 280, tableTop + 5, { width: 40, align: "center" });\n\
+      doc.text("Rate", 330, tableTop + 5, { width: 70, align: "right" });\n\
+      doc.text("Amount", 430, tableTop + 5, { width: 70, align: "right" });\n\
+      \n\
+      // Items rows\n\
+      let itemY = tableTop + 25;\n\
+      \n\
+      if (bill.items && bill.items.length > 0) {\n\
+        bill.items.forEach((item, i) => {\n\
+          // Add zebra striping\n\
+          if (i % 2 === 0) {\n\
+            doc.rect(50, itemY - 5, doc.page.width - 100, 25).fill("#f8f8f8");\n\
+            doc.fillColor("black");\n\
+          }\n\
+          \n\
+          doc.font("Helvetica").fontSize(11);\n\
+          doc.text(item.description || "Item", 60, itemY);\n\
+          doc.text(safeToString(item.quantity || 1), 280, itemY, { width: 40, align: "center" });\n\
+          doc.text(safeToString(item.rate || item.price || 0), 330, itemY, { width: 70, align: "right" });\n\
+          doc.text(safeToString(item.amount || item.total || 0), 430, itemY, { width: 70, align: "right" });\n\
+          \n\
+          itemY = doc.y + 15;\n\
+          doc.y = itemY;\n\
+        });\n\
+      } else {\n\
+        // Handle case where there are no items or items is in a different format\n\
+        doc.rect(50, itemY - 5, doc.page.width - 100, 25).fill("#f8f8f8");\n\
+        doc.fillColor("black");\n\
+        doc.font("Helvetica").fontSize(11);\n\
+        doc.text("Total Amount", 60, itemY);\n\
+        doc.text("1", 280, itemY, { width: 40, align: "center" });\n\
+        doc.text("", 330, itemY, { width: 70, align: "right" });\n\
+        doc.text(safeToString(bill.total || bill.amount || 0), 430, itemY, { width: 70, align: "right" });\n\
+      }\n\
+      \n\
+      // Add bottom border to table\n\
+      doc.moveTo(50, doc.y + 10).lineTo(doc.page.width - 50, doc.y + 10).stroke();\n\
+      \n\
+      // Totals section with background shading\n\
+      const totalsStartY = doc.y + 20;\n\
+      \n\
+      // Subtotal\n\
+      doc.font("Helvetica").fontSize(12);\n\
+      doc.text("Subtotal:", 330, totalsStartY, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.subtotal || bill.subTotal || bill.total || 0), 430, totalsStartY, { width: 70, align: "right" });\n\
+      \n\
+      // Tax\n\
+      doc.text("Tax:", 330, totalsStartY + 20, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.tax || 0), 430, totalsStartY + 20, { width: 70, align: "right" });\n\
+      \n\
+      // Total with background highlight\n\
+      doc.rect(330, totalsStartY + 40, 170, 25).fill("#e6e6e6");\n\
+      doc.fillColor("black");\n\
+      doc.font("Helvetica-Bold").fontSize(12);\n\
+      doc.text("Total:", 330, totalsStartY + 45, { width: 70, align: "right" });\n\
+      doc.text(safeToString(bill.total || bill.amount || 0) + " LKR", 430, totalsStartY + 45, { width: 70, align: "right" });\n\
+      \n\
+      // Payment details\n\
+      doc.moveDown(3);\n\
+      if (bill.paymentMethod || bill.bill_type) {\n\
+        doc.font("Helvetica").fontSize(12);\n\
+        doc.text(`Payment Method: ${bill.paymentMethod || bill.bill_type || "N/A"}`, { align: "left" });\n\
       }\n\
       \n\
       // Notes\n\
       if (bill.notes || bill.remarks) {\n\
         doc.moveDown();\n\
-        doc.text("Notes:");\n\
-        doc.text(bill.notes || bill.remarks);\n\
+        doc.font("Helvetica-Bold").fontSize(12).text("Notes:");\n\
+        doc.font("Helvetica").text(bill.notes || bill.remarks);\n\
       }\n\
       \n\
       // Footer\n\
-      doc.moveDown(2);\n\
-      doc.fontSize(10).text("Thank you for your business!", { align: "center" });\n\
-      doc.text("Gunawardhana Motors, Embilipitiya | Tel: 047-1234567", { align: "center" });\n\
+      const footerY = doc.page.height - 100;\n\
+      doc.moveTo(50, footerY).lineTo(doc.page.width - 50, footerY).stroke();\n\
+      doc.moveDown(0.5);\n\
+      \n\
+      doc.fontSize(10).font("Helvetica-Bold").text("Thank you for your business!", { align: "center" });\n\
+      doc.fontSize(10).font("Helvetica").text("Gunawardhana Motors, Embilipitiya | Tel: 070 3131 899", { align: "center" });\n\
       \n\
       // Finalize the PDF\n\
       doc.end();\n\
@@ -162,32 +253,36 @@ exports.generatePDF = async (bill) => {\n\
 RUN printf 'const mongoose = require("mongoose");\n\
 \n\
 const BikeModelSchema = new mongoose.Schema({\n\
-  make: {\n\
+  name: {\n\
     type: String,\n\
-    required: [true, "Make is required"],\n\
+    required: [true, "Model name is required"],\n\
     trim: true\n\
   },\n\
-  bikeModel: {\n\
-    type: String,\n\
-    required: [true, "Model is required"],\n\
-    trim: true\n\
-  },\n\
-  year: {\n\
+  price: {\n\
     type: Number,\n\
-    required: [true, "Year is required"],\n\
-    min: [1900, "Year must be at least 1900"],\n\
-    max: [new Date().getFullYear() + 1, "Year cannot be in the future"]\n\
+    required: [true, "Price is required"]\n\
+  },\n\
+  motor_number_prefix: {\n\
+    type: String,\n\
+    trim: true\n\
+  },\n\
+  chassis_number_prefix: {\n\
+    type: String,\n\
+    trim: true\n\
+  },\n\
+  is_ebicycle: {\n\
+    type: Boolean,\n\
+    default: false\n\
+  },\n\
+  can_be_leased: {\n\
+    type: Boolean,\n\
+    default: true\n\
   }\n\
 }, {\n\
   timestamps: true,\n\
-  versionKey: false\n\
+  versionKey: false,\n\
+  collection: "bike_models" // Set the collection name explicitly to match MongoDB\n\
 });\n\
-\n\
-// Create a compound index for performance\n\
-BikeModelSchema.index({ make: 1, bikeModel: 1, year: 1 }, { unique: true });\n\
-\n\
-// Create text indexes for search\n\
-BikeModelSchema.index({ make: "text", bikeModel: "text" });\n\
 \n\
 module.exports = mongoose.model("BikeModel", BikeModelSchema);' > src/models/BikeModel.js
 
@@ -362,7 +457,7 @@ app.get("/api/health", (req, res) => {\n\
 // Bike Models routes\n\
 app.get("/api/bike-models", async (req, res) => {\n\
   try {\n\
-    const bikeModels = await BikeModel.find().sort({ make: 1, bikeModel: 1 });\n\
+    const bikeModels = await BikeModel.find().sort({ name: 1 });\n\
     res.status(200).json(bikeModels);\n\
   } catch (error) {\n\
     logger.error(`Error fetching bike models: ${error.message}`);\n\
@@ -370,13 +465,29 @@ app.get("/api/bike-models", async (req, res) => {\n\
   }\n\
 });\n\
 \n\
+app.get("/api/bike-models/:id", async (req, res) => {\n\
+  try {\n\
+    const bikeModel = await BikeModel.findById(req.params.id);\n\
+    if (!bikeModel) {\n\
+      return res.status(404).json({ error: "Bike model not found" });\n\
+    }\n\
+    res.status(200).json(bikeModel);\n\
+  } catch (error) {\n\
+    logger.error(`Error fetching bike model by ID: ${error.message}`);\n\
+    res.status(500).json({ error: error.message });\n\
+  }\n\
+});\n\
+\n\
 app.post("/api/bike-models", async (req, res) => {\n\
   try {\n\
-    const { make, model, year } = req.body;\n\
+    const { name, price, motor_number_prefix, chassis_number_prefix, is_ebicycle, can_be_leased } = req.body;\n\
     const bikeModel = await BikeModel.create({\n\
-      make,\n\
-      bikeModel: model,\n\
-      year: parseInt(year)\n\
+      name,\n\
+      price,\n\
+      motor_number_prefix,\n\
+      chassis_number_prefix,\n\
+      is_ebicycle,\n\
+      can_be_leased\n\
     });\n\
     res.status(201).json(bikeModel);\n\
   } catch (error) {\n\
@@ -385,7 +496,7 @@ app.post("/api/bike-models", async (req, res) => {\n\
       return res.status(400).json({ error: `Validation error: ${messages.join(", ")}` });\n\
     }\n\
     if (error.code === 11000) {\n\
-      return res.status(400).json({ error: "Bike model with this make, model, and year already exists" });\n\
+      return res.status(400).json({ error: "Bike model with this name already exists" });\n\
     }\n\
     logger.error(`Error creating bike model: ${error.message}`);\n\
     res.status(500).json({ error: error.message });\n\
