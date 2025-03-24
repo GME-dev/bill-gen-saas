@@ -324,6 +324,57 @@ const connectToDatabase = async () => {\n\
   try {\n\
     await mongoose.connect(MONGODB_URI);\n\
     logger.info("Connected to MongoDB successfully");\n\
+    \n\
+    // Add sample bike models if none exist\n\
+    const count = await BikeModel.countDocuments();\n\
+    if (count === 0) {\n\
+      const sampleBikes = [\n\
+        {\n\
+          name: "Bajaj Pulsar NS160",\n\
+          price: 499500,\n\
+          motor_number_prefix: "NS160",\n\
+          chassis_number_prefix: "PULS",\n\
+          is_ebicycle: false,\n\
+          can_be_leased: true\n\
+        },\n\
+        {\n\
+          name: "Bajaj Discover 125",\n\
+          price: 349500,\n\
+          motor_number_prefix: "D125",\n\
+          chassis_number_prefix: "DISC",\n\
+          is_ebicycle: false,\n\
+          can_be_leased: true\n\
+        },\n\
+        {\n\
+          name: "TVS Apache RTR 160",\n\
+          price: 475000,\n\
+          motor_number_prefix: "RTR160",\n\
+          chassis_number_prefix: "APACHE",\n\
+          is_ebicycle: false,\n\
+          can_be_leased: true\n\
+        },\n\
+        {\n\
+          name: "Hero Splendor Plus",\n\
+          price: 249500,\n\
+          motor_number_prefix: "SPL",\n\
+          chassis_number_prefix: "SPLN",\n\
+          is_ebicycle: false,\n\
+          can_be_leased: true\n\
+        },\n\
+        {\n\
+          name: "Honda CB Shine",\n\
+          price: 299500,\n\
+          motor_number_prefix: "CBS",\n\
+          chassis_number_prefix: "SHINE",\n\
+          is_ebicycle: false,\n\
+          can_be_leased: true\n\
+        }\n\
+      ];\n\
+      \n\
+      await BikeModel.insertMany(sampleBikes);\n\
+      logger.info("Added sample bike models");\n\
+    }\n\
+    \n\
     return mongoose;\n\
   } catch (error) {\n\
     logger.error(`MongoDB connection error: ${error.message}`);\n\
