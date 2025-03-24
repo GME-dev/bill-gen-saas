@@ -11,12 +11,13 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p dist/templates data
+# Create necessary directories and ensure templates exist
+RUN mkdir -p dist/templates data && \
+    mkdir -p src/templates && \
+    touch src/templates/.keep
 
 # Build TypeScript code
-RUN NODE_ENV=production npm run build && \
-    cp -r src/templates/* dist/templates/ 2>/dev/null || true
+RUN NODE_ENV=production npm run build
 
 # Start a new stage for production
 FROM node:18-alpine
@@ -29,10 +30,9 @@ RUN npm install --omit=dev
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src/templates ./dist/templates
 
-# Create data directory for SQLite
-RUN mkdir -p data
+# Create necessary directories
+RUN mkdir -p data dist/templates
 
 # Set default environment variables (these can be overridden by Railway)
 ENV PORT=8080 \
