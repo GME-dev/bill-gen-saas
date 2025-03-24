@@ -305,7 +305,7 @@ BillSchema.pre("save", async function(next) {\n\
 \n\
 module.exports = mongoose.model("Bill", BillSchema);' > src/models/Bill.js
 
-# Create server.js with updated bike models
+# Create server.js without sample data
 RUN printf 'require("dotenv").config();\n\
 const express = require("express");\n\
 const cors = require("cors");\n\
@@ -324,57 +324,6 @@ const connectToDatabase = async () => {\n\
   try {\n\
     await mongoose.connect(MONGODB_URI);\n\
     logger.info("Connected to MongoDB successfully");\n\
-    \n\
-    // Add sample bike models if none exist\n\
-    const count = await BikeModel.countDocuments();\n\
-    if (count === 0) {\n\
-      const sampleBikes = [\n\
-        {\n\
-          name: "TMR-G18",\n\
-          price: 499500,\n\
-          motor_number_prefix: "G18",\n\
-          chassis_number_prefix: "G18",\n\
-          is_ebicycle: false,\n\
-          can_be_leased: true\n\
-        },\n\
-        {\n\
-          name: "TMR-MNK3",\n\
-          price: 475000,\n\
-          motor_number_prefix: "MNK3",\n\
-          chassis_number_prefix: "MNK3",\n\
-          is_ebicycle: false,\n\
-          can_be_leased: true\n\
-        },\n\
-        {\n\
-          name: "TMR-G16",\n\
-          price: 449500,\n\
-          motor_number_prefix: "G16",\n\
-          chassis_number_prefix: "G16",\n\
-          is_ebicycle: false,\n\
-          can_be_leased: true\n\
-        },\n\
-        {\n\
-          name: "TMR-G15",\n\
-          price: 399500,\n\
-          motor_number_prefix: "G15",\n\
-          chassis_number_prefix: "G15",\n\
-          is_ebicycle: false,\n\
-          can_be_leased: true\n\
-        },\n\
-        {\n\
-          name: "TMR-G14",\n\
-          price: 349500,\n\
-          motor_number_prefix: "G14",\n\
-          chassis_number_prefix: "G14",\n\
-          is_ebicycle: false,\n\
-          can_be_leased: true\n\
-        }\n\
-      ];\n\
-      \n\
-      await BikeModel.insertMany(sampleBikes);\n\
-      logger.info("Added sample bike models");\n\
-    }\n\
-    \n\
     return mongoose;\n\
   } catch (error) {\n\
     logger.error(`MongoDB connection error: ${error.message}`);\n\
