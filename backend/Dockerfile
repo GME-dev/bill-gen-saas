@@ -478,17 +478,28 @@ const BikeModel = require("./models/BikeModel");\n\
 const app = express();\n\
 const port = process.env.PORT || 8080;\n\
 \n\
-// Middleware\n\
+// CORS configuration - Simplified for reliability\n\
+app.use((req, res, next) => {\n\
+  // Log each request for debugging\n\
+  logger.info(`${req.method} ${req.path} from origin: ${req.headers.origin}`);\n\
+  \n\
+  // Set CORS headers directly\n\
+  res.header("Access-Control-Allow-Origin", "https://bill-gen-saas.pages.dev");\n\
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");\n\
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");\n\
+  res.header("Access-Control-Allow-Credentials", "true");\n\
+  \n\
+  // Respond immediately to OPTIONS requests\n\
+  if (req.method === "OPTIONS") {\n\
+    return res.status(200).end();\n\
+  }\n\
+  \n\
+  next();\n\
+});\n\
+\n\
+// Standard middleware\n\
 app.use(express.json());\n\
 app.use(express.urlencoded({ extended: true }));\n\
-\n\
-// CORS\n\
-const corsOptions = {\n\
-  origin: process.env.CORS_ORIGIN || "*",\n\
-  credentials: true,\n\
-  optionsSuccessStatus: 200\n\
-};\n\
-app.use(cors(corsOptions));\n\
 \n\
 // Logging\n\
 if (process.env.NODE_ENV !== "test") {\n\
