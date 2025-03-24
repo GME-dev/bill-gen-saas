@@ -34,6 +34,8 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "pdfkit": "^0.14.0",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
     "winston": "^3.11.0"
   },
   "devDependencies": {
@@ -47,8 +49,6 @@
     "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
     "nodemon": "^3.0.3",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3",
     "vitest": "^1.2.1"
   },
   "engines": {
