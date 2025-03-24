@@ -67,21 +67,13 @@ const sampleBikeModels = [\n\
   { id: "4", name: "TVS Apache", price: 140000, brand: "TVS" }\n\
 ];\n\
 \n\
-// API routes\n\
+// API routes - Return direct arrays to fix frontend map() function\n\
 app.get("/api/bills", (req, res) => {\n\
-  res.status(200).json({\n\
-    success: true,\n\
-    data: sampleBills,\n\
-    count: sampleBills.length\n\
-  });\n\
+  res.status(200).json(sampleBills);\n\
 });\n\
 \n\
 app.get("/api/bike-models", (req, res) => {\n\
-  res.status(200).json({\n\
-    success: true,\n\
-    data: sampleBikeModels,\n\
-    count: sampleBikeModels.length\n\
-  });\n\
+  res.status(200).json(sampleBikeModels);\n\
 });\n\
 \n\
 // Start server\n\
